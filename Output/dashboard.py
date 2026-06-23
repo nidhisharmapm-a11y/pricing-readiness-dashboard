@@ -5,112 +5,150 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 
-st.set_page_config(page_title="Workstream Pricing Dashboard", layout="wide", page_icon="💰")
+# ── Page Config ───────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="Workstream Pricing Intelligence",
+    layout="wide",
+    page_icon="⚡",
+    initial_sidebar_state="expanded",
+)
 
-# ── Brand colors ──────────────────────────────────────────────────────────────
+# ── Brand Colors ──────────────────────────────────────────────────────────────
 PRIMARY = "#1B3FE4"
 NAVY    = "#0F1B2D"
 BG      = "#EEF2FF"
 WHITE   = "#FFFFFF"
-YELLOW  = "#FFE600"
 GREEN   = "#00B67A"
+AMBER   = "#FFA500"
 RED     = "#FF4444"
 GRAY    = "#6B7280"
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-LIST_PRICES  = {"Hiring": 75.0,  "HR": 100.0, "Payroll": 14.0}
-FLOOR_PRICES = {"Hiring": 60.0,  "HR": 80.0,  "Payroll": 11.0}
+LIST_PRICES  = {"Hiring": 75.0, "HR": 100.0, "Payroll": 14.0}
+FLOOR_PRICES = {"Hiring": 60.0, "HR": 80.0,  "Payroll": 11.0}
 REF_DATE     = pd.Timestamp("2026-06-20")
 
+SEG_COLORS = {"A": GREEN, "B": PRIMARY, "C": AMBER, "D": RED}
 STATUS_COLORS = {
     "Locked":      PRIMARY,
-    "Expired M2M": YELLOW,
+    "Expired M2M": AMBER,
     "No Contract": GRAY,
     "No SF Link":  RED,
 }
-SEG_COLORS = {"A": GREEN, "B": PRIMARY, "C": YELLOW, "D": RED}
+RISK_COLORS = {1: GREEN, 2: "#66D4A8", 3: AMBER, 4: "#FF8C00", 5: RED}
 
 def get_path(filename):
     return os.path.join(os.path.dirname(__file__), "..", "Input", filename)
 
-# ── Custom CSS ────────────────────────────────────────────────────────────────
+# ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown(f"""
 <style>
-  .metric-card {{
-    background: {WHITE}; border-radius: 10px; padding: 18px 22px;
-    box-shadow: 0 2px 8px rgba(0,0,0,.08); margin-bottom: 8px;
+  [data-testid="stSidebar"] {{ background:{NAVY} !important; }}
+  [data-testid="stSidebar"] label {{ color:rgba(255,255,255,.85) !important; font-size:12px !important; }}
+  [data-testid="stSidebar"] .stSelectbox label {{ color:rgba(255,255,255,.7) !important; font-size:11px !important; font-weight:600; text-transform:uppercase; letter-spacing:.05em; }}
+  [data-testid="stSidebar"] .stRadio label {{ color:white !important; }}
+  [data-testid="stSidebar"] p {{ color:rgba(255,255,255,.6) !important; }}
+  .kpi-card {{
+    background:{WHITE}; border-radius:10px; padding:16px 18px;
+    box-shadow:0 1px 4px rgba(0,0,0,.07); border-top:3px solid {PRIMARY};
+    margin-bottom:8px;
   }}
-  .metric-label {{ font-size: 13px; color: {GRAY}; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }}
-  .metric-value {{ font-size: 28px; font-weight: 700; color: {NAVY}; margin: 4px 0 2px; }}
-  .metric-sub   {{ font-size: 13px; color: {GRAY}; }}
-  .section-header {{ font-size: 16px; font-weight: 700; color: {NAVY}; margin: 12px 0 6px; }}
+  .kpi-card.green {{ border-top-color:{GREEN}; }}
+  .kpi-card.amber {{ border-top-color:{AMBER}; }}
+  .kpi-card.red   {{ border-top-color:{RED};   }}
+  .kpi-card.gray  {{ border-top-color:{GRAY};  }}
+  .kpi-card.navy  {{ border-top-color:{NAVY};  }}
+  .kpi-label {{ font-size:10px; font-weight:700; color:{GRAY}; text-transform:uppercase; letter-spacing:.08em; }}
+  .kpi-value {{ font-size:22px; font-weight:800; color:{NAVY}; margin:3px 0 1px; line-height:1.1; }}
+  .kpi-sub   {{ font-size:11px; color:{GRAY}; }}
+  .section-title {{ font-size:13px; font-weight:700; color:{NAVY}; padding-bottom:6px; border-bottom:1px solid #dde3f0; margin-bottom:10px; }}
+  .page-banner {{ background:linear-gradient(120deg,{PRIMARY} 0%,{NAVY} 100%); border-radius:10px; padding:16px 24px; margin-bottom:16px; }}
+  .page-banner h2 {{ color:white; margin:0; font-size:18px; font-weight:800; }}
+  .page-banner p  {{ color:rgba(255,255,255,.75); margin:3px 0 0; font-size:12px; }}
+  .insight-box {{ background:{WHITE}; border-radius:8px; padding:12px 16px; border-left:4px solid {PRIMARY}; margin:10px 0; font-size:13px; color:{NAVY}; }}
+  .empty-state {{ text-align:center; padding:32px; color:{GRAY}; background:{WHITE}; border-radius:10px; border:1px dashed #ccd1e4; }}
+  .summary-row {{ background:{WHITE}; border-radius:8px; padding:14px 18px; display:flex; gap:32px; align-items:center; margin-top:12px; }}
 </style>
 """, unsafe_allow_html=True)
 
-def metric_card(label, value, sub="", color=None):
-    color = color or PRIMARY
+# ── Helpers ───────────────────────────────────────────────────────────────────
+def kpi(label, value, sub="", variant=""):
     st.markdown(f"""
-    <div class="metric-card">
-      <div class="metric-label">{label}</div>
-      <div class="metric-value" style="color:{color}">{value}</div>
-      <div class="metric-sub">{sub}</div>
+    <div class="kpi-card {variant}">
+      <div class="kpi-label">{label}</div>
+      <div class="kpi-value">{value}</div>
+      <div class="kpi-sub">{sub}</div>
     </div>""", unsafe_allow_html=True)
 
-# ── Data Loading ──────────────────────────────────────────────────────────────
-@st.cache_data
-def load_raw():
-    sx   = pd.read_csv(get_path("stripeXsfdc.csv"))
-    sc   = pd.read_csv(get_path("stripe_customers.csv"))
-    ss   = pd.read_csv(get_path("stripe_subscriptions.csv"))
-    sfa  = pd.read_csv(get_path("sfdc_accounts.csv"))
-    sfc  = pd.read_csv(get_path("sfdc_contracts.csv"))
-    return sx, sc, ss, sfa, sfc
+def section(title):
+    st.markdown(f'<div class="section-title">{title}</div>', unsafe_allow_html=True)
 
+def banner(title, subtitle=""):
+    st.markdown(f'<div class="page-banner"><h2>{title}</h2><p>{subtitle}</p></div>',
+                unsafe_allow_html=True)
 
+def empty_state(msg="No matching records"):
+    st.markdown(f'<div class="empty-state">📭 {msg}</div>', unsafe_allow_html=True)
+
+def download_btn(df, label="Download CSV", filename="export.csv"):
+    if len(df) > 0:
+        st.download_button(label, df.to_csv(index=False).encode(), filename, "text/csv",
+                           use_container_width=True)
+
+def safe_table(df, key, height=380):
+    if len(df) == 0:
+        empty_state()
+        return df
+    q = st.text_input("🔍 Search", key=f"srch_{key}", placeholder="Filter table…", label_visibility="collapsed")
+    if q:
+        mask = df.astype(str).apply(lambda c: c.str.contains(q, case=False, na=False)).any(axis=1)
+        df = df[mask]
+    if len(df) == 0:
+        empty_state(f'No records match "{q}"')
+    else:
+        st.dataframe(df, use_container_width=True, height=height, hide_index=True)
+    return df
+
+def fmt_arr(v):
+    if v >= 1_000_000: return f"${v/1_000_000:.2f}M"
+    if v >= 1_000:     return f"${v/1_000:.0f}K"
+    return f"${v:,.0f}"
+
+# ── Data ──────────────────────────────────────────────────────────────────────
 @st.cache_data
 def build_line_df():
-    sx, *_ = load_raw()
-    df = sx.copy()
-
-    # Normalise unit price → monthly per unit
-    df["unit_price"] = df["unit_amount"] / 100
+    df = pd.read_csv(get_path("stripeXsfdc.csv"))
+    df["unit_price"]        = df["unit_amount"] / 100
     df.loc[df["billing_interval"] == "year", "unit_price"] /= 12
-
-    # Activity flag
     df["last_billing_date"] = pd.to_datetime(df["last_billing_date"])
-    df["days_since"] = (REF_DATE - df["last_billing_date"]).dt.days
-    df["is_active"] = (
+    df["days_since"]        = (REF_DATE - df["last_billing_date"]).dt.days
+    df["is_active"]         = (
         ((df["billing_interval"] == "month") & (df["days_since"] <= 60)) |
-        ((df["billing_interval"] == "year") & (df["days_since"] <= 400))
+        ((df["billing_interval"] == "year")  & (df["days_since"] <= 400))
     )
-
-    # List / floor / revenue
-    df["list_price"]      = df["price_nickname"].map(LIST_PRICES)
-    df["floor_price"]     = df["price_nickname"].map(FLOOR_PRICES)
-    df["monthly_rev"]     = df["unit_price"]   * df["quantity"]
-    df["list_monthly_rev"]= df["list_price"]   * df["quantity"]
-    df["floor_gap_monthly"]= (df["floor_price"] - df["unit_price"]).clip(lower=0) * df["quantity"]
-    df["below_floor"]     = df["unit_price"] < df["floor_price"]
-
-    # Flags
-    df["end_date"]    = pd.to_datetime(df["end_date"], errors="coerce")
-    df["has_sf"]      = df["metadata_salesforce_id"].notna() & (df["metadata_salesforce_id"] != "")
-    df["has_contract"]= df["contract_id"].notna() & (df["contract_id"] != "")
-
+    df["list_price"]        = df["price_nickname"].map(LIST_PRICES)
+    df["floor_price"]       = df["price_nickname"].map(FLOOR_PRICES)
+    df["monthly_rev"]       = df["unit_price"]   * df["quantity"]
+    df["list_monthly_rev"]  = df["list_price"]   * df["quantity"]
+    df["floor_gap_monthly"] = (df["floor_price"] - df["unit_price"]).clip(lower=0) * df["quantity"]
+    df["below_floor"]       = df["unit_price"] < df["floor_price"]
+    df["end_date"]          = pd.to_datetime(df["end_date"], errors="coerce")
+    df["has_sf"]            = df["metadata_salesforce_id"].notna() & (df["metadata_salesforce_id"] != "")
+    df["has_contract"]      = df["contract_id"].notna() & (df["contract_id"] != "")
     return df
 
 
 @st.cache_data
 def build_customer_df():
-    df = build_line_df()
-    active = df[df["is_active"]].copy()
+    line_df = build_line_df()
+    active  = line_df[line_df["is_active"]].copy()
 
     def agg(g):
-        monthly_rev  = (g["unit_price"]    * g["quantity"]).sum()
-        list_rev     = (g["list_price"]    * g["quantity"]).sum()
-        floor_gap_an = g["floor_gap_monthly"].sum() * 12
-        pct          = monthly_rev / list_rev if list_rev > 0 else 0
-        increase_pct = max(0, (1 / pct - 1) * 100) if pct > 0 else 999
+        mr   = (g["unit_price"] * g["quantity"]).sum()
+        lr   = (g["list_price"] * g["quantity"]).sum()
+        fg   = g["floor_gap_monthly"].sum() * 12
+        pct  = mr / lr if lr > 0 else 0
+        inc  = max(0, (1 / pct - 1) * 100) if pct > 0 else 999
 
         has_sf       = g["has_sf"].any()
         has_contract = g["has_contract"].any()
@@ -118,18 +156,14 @@ def build_customer_df():
         created      = pd.to_datetime(g["created"].min())
         tenure_years = (REF_DATE - created).days / 365.25
 
-        csm_ser  = g["csm_name__c"].dropna()
-        csm_ser  = csm_ser[csm_ser != ""]
-        has_csm  = len(csm_ser) > 0
-        csm_name = csm_ser.iloc[0] if has_csm else ""
+        csm_s    = g["csm_name__c"].dropna()
+        csm_s    = csm_s[csm_s.str.strip() != ""]
+        has_csm  = len(csm_s) > 0
+        csm_name = csm_s.iloc[0] if has_csm else ""
 
-        ae_ser  = g["account_ae"].dropna()
-        ae_ser  = ae_ser[ae_ser != ""]
-        ae_name = ae_ser.iloc[0] if len(ae_ser) > 0 else "—"
-
-        state = g["billing_state"].dropna()
-        state = state[state != ""]
-        state_val = state.iloc[0] if len(state) > 0 else ""
+        ae_s    = g["account_ae"].dropna()
+        ae_s    = ae_s[ae_s.str.strip() != ""]
+        ae_name = ae_s.iloc[0] if len(ae_s) > 0 else "—"
 
         if has_contract and pd.notna(end_date) and end_date > REF_DATE:
             status = "Locked"
@@ -143,12 +177,12 @@ def build_customer_df():
         products = ", ".join(sorted(g["price_nickname"].unique()))
 
         return pd.Series({
-            "monthly_mrr":    monthly_rev,
-            "annual_arr":     monthly_rev * 12,
-            "list_annual_arr":list_rev * 12,
-            "pct_of_list":    pct,
-            "increase_pct":   increase_pct,
-            "floor_gap_annual": floor_gap_an,
+            "monthly_mrr":      mr,
+            "annual_arr":       mr * 12,
+            "list_annual_arr":  lr * 12,
+            "pct_of_list":      pct,
+            "increase_pct":     inc,
+            "floor_gap_annual": fg,
             "any_below_floor":  g["below_floor"].any(),
             "contract_status":  status,
             "end_date":         end_date,
@@ -156,755 +190,829 @@ def build_customer_df():
             "has_csm":          has_csm,
             "csm_name":         csm_name,
             "account_ae":       ae_name,
-            "billing_state":    state_val,
             "has_sf":           has_sf,
             "products":         products,
         })
 
     cust = active.groupby("stripe_customer_id").apply(agg).reset_index()
-    name_map  = active.groupby("stripe_customer_id")["name"].first()
-    email_map = active.groupby("stripe_customer_id")["email"].first()
-    lbd_map   = active.groupby("stripe_customer_id")["last_billing_date"].max()
 
-    cust["name"]              = cust["stripe_customer_id"].map(name_map)
-    cust["email"]             = cust["stripe_customer_id"].map(email_map)
-    cust["last_billing_date"] = cust["stripe_customer_id"].map(lbd_map)
+    name_map = active.groupby("stripe_customer_id")["name"].first()
+    cust["name"] = cust["stripe_customer_id"].map(name_map).fillna("Unknown")
 
     # Segment
-    def seg(p):
-        if p >= 1.0:  return "A"
-        elif p >= 0.9:return "B"
-        elif p >= 0.75:return "C"
-        else:          return "D"
-    cust["segment"] = cust["pct_of_list"].apply(seg)
+    cust["segment"] = cust["pct_of_list"].apply(
+        lambda p: "A" if p >= 1.0 else ("B" if p >= 0.9 else ("C" if p >= 0.75 else "D"))
+    )
 
-    # Churn risk (non-locked only)
+    # Revenue opportunity (gap to list, annualised)
+    cust["revenue_opportunity"] = (cust["list_annual_arr"] - cust["annual_arr"]).clip(lower=0)
+
+    # Churn risk scoring (non-locked only, from report methodology)
     def churn_risk(row):
         if row["contract_status"] == "Locked":
             return np.nan
+        p, inc, yrs, st_ = (row["pct_of_list"], row["increase_pct"],
+                             row["tenure_years"], row["contract_status"])
+        dd = 1 if p >= 1.0 else (2 if p >= 0.9 else (3 if p >= 0.75 else (4 if p >= 0.6 else 5)))
+        cp = 3 if st_ == "Expired M2M" else 5
+        t  = 1 if yrs >= 4 else (2 if yrs >= 3 else (3 if yrs >= 2 else (4 if yrs >= 1 else 5)))
+        im = 1 if inc <= 0 else (2 if inc <= 9 else (3 if inc <= 29 else (4 if inc <= 40 else 5)))
+        return int(np.clip(round(0.30*dd + 0.30*cp + 0.20*t + 0.20*im), 1, 5))
 
-        p   = row["pct_of_list"]
-        inc = row["increase_pct"]
-        yrs = row["tenure_years"]
-        st_ = row["contract_status"]
+    cust["churn_risk"] = cust.apply(churn_risk, axis=1)
 
-        if p >= 1.0:  dd = 1
-        elif p >= 0.9:dd = 2
-        elif p >= 0.75:dd = 3
-        elif p >= 0.6: dd = 4
-        else:          dd = 5
-
-        if st_ == "Expired M2M": cp = 3
-        else:                     cp = 5
-
-        if yrs >= 4:  t = 1
-        elif yrs >= 3:t = 2
-        elif yrs >= 2:t = 3
-        elif yrs >= 1:t = 4
-        else:         t = 5
-
-        if inc <= 0:   im = 1
-        elif inc <= 9: im = 2
-        elif inc <= 29:im = 3
-        elif inc <= 40:im = 4
-        else:          im = 5
-
-        raw = 0.30*dd + 0.30*cp + 0.20*t + 0.20*im
-        return int(np.clip(round(raw), 1, 5))
-
-    def primary_risk(row):
-        if row["contract_status"] == "Locked" or pd.isna(row["churn_risk"]):
-            return ""
-        p   = row["pct_of_list"]
-        inc = row["increase_pct"]
-        yrs = row["tenure_years"]
-        st_ = row["contract_status"]
-
-        if p >= 1.0:  dd = 1
-        elif p >= 0.9:dd = 2
-        elif p >= 0.75:dd = 3
-        elif p >= 0.6: dd = 4
-        else:          dd = 5
-
-        if st_ == "Expired M2M": cp = 3
-        else:                     cp = 5
-
-        if yrs >= 4:  t = 1
-        elif yrs >= 3:t = 2
-        elif yrs >= 2:t = 3
-        elif yrs >= 1:t = 4
-        else:         t = 5
-
-        if inc <= 0:   im = 1
-        elif inc <= 9: im = 2
-        elif inc <= 29:im = 3
-        elif inc <= 40:im = 4
-        else:          im = 5
-
-        scores = {"Discount depth": 0.30*dd, "Contract risk": 0.30*cp,
-                  "Short tenure": 0.20*t, "Price increase needed": 0.20*im}
-        return max(scores, key=scores.get)
-
-    cust["churn_risk"]    = cust.apply(churn_risk, axis=1)
-    cust["primary_risk"]  = cust.apply(primary_risk, axis=1)
-
-    # Phase assignment for non-locked
-    def phase(row):
+    # Phase assignment
+    def phase_fn(row):
         if pd.isna(row["churn_risk"]): return np.nan
         s = row["churn_risk"]
-        if s <= 2: return 1
-        elif s == 3: return 2
-        else: return 3
-    cust["phase"] = cust.apply(phase, axis=1)
+        return 1 if s <= 2 else (2 if s == 3 else 3)
+
+    cust["phase"] = cust.apply(phase_fn, axis=1)
+
+    # Recommended action (derived from contract status + risk)
+    def rec_action(row):
+        st_ = row["contract_status"]
+        pct = row["pct_of_list"]
+        rsk = row["churn_risk"]
+        if st_ == "Locked":
+            return "Price review at renewal" if pct < 1.0 else "Maintain — at list"
+        elif st_ == "Expired M2M":
+            return "Immediate price reset"
+        elif st_ == "No SF Link":
+            return "Resolve Salesforce link"
+        elif st_ == "No Contract":
+            if not pd.isna(rsk) and rsk >= 4:
+                return "Urgent: contract + price action"
+            return "Execute contract, then price"
+        return "Review pricing"
+
+    cust["recommended_action"] = cust.apply(rec_action, axis=1)
+
+    # Renewal buckets (locked only)
+    def renewal_bucket(row):
+        if row["contract_status"] != "Locked" or pd.isna(row["end_date"]):
+            return None
+        months = (row["end_date"] - REF_DATE).days / 30.44
+        if months <= 3:    return "0–3 Months"
+        elif months <= 6:  return "3–6 Months"
+        elif months <= 12: return "6–12 Months"
+        else:               return "12+ Months"
+
+    cust["renewal_bucket"] = cust.apply(renewal_bucket, axis=1)
 
     return cust
 
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
+# ── Sidebar (Navigation + Filters) ───────────────────────────────────────────
+cust_all = build_customer_df()
+line_all = build_line_df()
+active_all = line_all[line_all["is_active"]].copy()
+
 with st.sidebar:
-    st.markdown(f"<div style='font-size:22px;font-weight:800;color:{PRIMARY};letter-spacing:-.02em;'>Workstream</div>", unsafe_allow_html=True)
-    st.markdown(f"<div style='font-size:11px;color:{GRAY};margin-top:-4px;margin-bottom:12px;'>Data source: Stripe + Salesforce</div>", unsafe_allow_html=True)
-    st.divider()
+    st.markdown(f"""
+    <div style='padding:6px 0 18px'>
+      <div style='font-size:21px;font-weight:900;color:white;letter-spacing:-.03em'>⚡ Workstream</div>
+      <div style='font-size:10px;color:rgba(255,255,255,.45);margin-top:2px;font-weight:600;letter-spacing:.08em;text-transform:uppercase'>Pricing Intelligence</div>
+    </div>""", unsafe_allow_html=True)
 
-    cust_all = build_customer_df()
+    page = st.radio(
+        "nav",
+        ["Executive Summary", "Pricing Opportunity", "Risk & Readiness", "Action Center"],
+        label_visibility="collapsed",
+    )
 
-    seg_filter = st.selectbox("Segment", ["All", "A", "B", "C", "D"])
-    status_filter = st.selectbox("Contract Status",
-        ["All", "Locked", "Expired M2M", "No Contract", "No SF Link"])
-    ae_options = ["All"] + sorted(cust_all["account_ae"].dropna().unique().tolist())
-    ae_filter = st.selectbox("AE Name", ae_options)
+    st.markdown("<hr style='border-color:rgba(255,255,255,.12);margin:12px 0'>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size:10px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px'>Global Filters</div>", unsafe_allow_html=True)
 
-    st.divider()
-    st.markdown("**Revenue Impact Phases**")
-    ph1_ret = st.slider("Phase 1 Retention %", 50, 100, 88, format="%d%%") / 100
-    ph2_ret = st.slider("Phase 2 Retention %", 50, 100, 85, format="%d%%") / 100
-    ph3_ret = st.slider("Phase 3 Retention %", 50, 100, 83, format="%d%%") / 100
+    ae_opts   = ["All"] + sorted([x for x in cust_all["account_ae"].dropna().unique() if str(x).strip() and x != "—"])
+    csm_opts  = ["All"] + sorted([x for x in cust_all["csm_name"].dropna().unique() if str(x).strip()])
+    prod_opts = ["All"] + sorted(active_all["price_nickname"].dropna().unique().tolist())
 
-# ── Apply filters ─────────────────────────────────────────────────────────────
+    f_ae     = st.selectbox("AE Owner",        ae_opts)
+    f_seg    = st.selectbox("Segment",         ["All", "A", "B", "C", "D"])
+    f_status = st.selectbox("Contract Status", ["All", "Locked", "Expired M2M", "No Contract", "No SF Link"])
+    f_prod   = st.selectbox("Product",         prod_opts)
+    f_csm    = st.selectbox("CSM",             csm_opts)
+
+    st.markdown("<hr style='border-color:rgba(255,255,255,.12);margin:12px 0'>", unsafe_allow_html=True)
+    st.caption(f"Data through {REF_DATE.strftime('%b %d, %Y')}")
+
+
+# ── Filter Application ────────────────────────────────────────────────────────
 def apply_filters(df):
     d = df.copy()
-    if seg_filter != "All":
-        d = d[d["segment"] == seg_filter]
-    if status_filter != "All":
-        d = d[d["contract_status"] == status_filter]
-    if ae_filter != "All":
-        d = d[d["account_ae"] == ae_filter]
+    if f_ae != "All":
+        d = d[d["account_ae"] == f_ae]
+    if f_seg != "All":
+        d = d[d["segment"] == f_seg]
+    if f_status != "All":
+        d = d[d["contract_status"] == f_status]
+    if f_prod != "All":
+        d = d[d["products"].str.contains(f_prod, na=False)]
+    if f_csm != "All":
+        d = d[d["csm_name"] == f_csm]
     return d
 
-cust = apply_filters(cust_all)
 
-# ── Helper: download button ───────────────────────────────────────────────────
-def download_btn(df, label="Download CSV", filename="export.csv"):
-    st.download_button(label, df.to_csv(index=False).encode(), filename, "text/csv")
+def apply_line_filters(line_df, cust_df):
+    ids = set(cust_df["stripe_customer_id"])
+    d   = line_df[line_df["stripe_customer_id"].isin(ids)].copy()
+    if f_prod != "All":
+        d = d[d["price_nickname"] == f_prod]
+    return d
 
-# ── Searchable table helper ───────────────────────────────────────────────────
-def searchable_table(df, key, height=400):
-    q = st.text_input("🔍 Search", key=f"search_{key}", placeholder="Type to filter…")
-    if q:
-        mask = df.astype(str).apply(lambda col: col.str.contains(q, case=False, na=False)).any(axis=1)
-        df = df[mask]
-    st.dataframe(df, use_container_width=True, height=height)
-    return df
+
+cust         = apply_filters(cust_all)
+active_lines = apply_line_filters(active_all, cust)
+
+
+# ── Named Chart Functions (reusable across pages) ─────────────────────────────
+
+def chart_arr_projection_updated(cust_df, ph1=0.88, ph2=0.85, ph3=0.83):
+    """ARR Projection: baseline vs phased scenario over 12 months."""
+    scored = cust_df[cust_df["phase"].notna()].copy()
+    scored["phase"] = scored["phase"].astype(int)
+
+    locked_arr = cust_df[cust_df["contract_status"] == "Locked"]["annual_arr"].sum()
+    baseline   = cust_df["annual_arr"].sum() if len(cust_df) > 0 else 0
+
+    def ph_uplift(ph_num, ret):
+        ph = scored[scored["phase"] == ph_num]
+        if len(ph) == 0:
+            return 0
+        below = ph[ph["pct_of_list"] < 1.0]
+        max_up = max(0, below["list_annual_arr"].sum() - below["annual_arr"].sum())
+        return ret * max_up
+
+    u1 = ph_uplift(1, ph1)
+    u2 = ph_uplift(2, ph2)
+    u3 = ph_uplift(3, ph3)
+
+    months  = [0, 3, 6, 12]
+    base_ln = [baseline] * 4
+    sc_ln   = [baseline, baseline + u1, baseline + u1 + u2, baseline + u1 + u2 + u3]
+
+    fig = go.Figure()
+    fig.add_scatter(x=months, y=base_ln, name="Baseline",
+                    line=dict(color=GRAY, dash="dash", width=2), mode="lines+markers",
+                    marker=dict(size=7))
+    fig.add_scatter(x=months, y=sc_ln, name="Scenario",
+                    line=dict(color=PRIMARY, width=3), mode="lines+markers",
+                    marker=dict(size=8), fill="tonexty",
+                    fillcolor=f"rgba(27,63,228,.08)")
+    fig.update_layout(
+        height=280, margin=dict(t=10, b=30, l=10, r=10),
+        xaxis=dict(title="Month", tickvals=[0, 3, 6, 12]),
+        yaxis=dict(tickformat="$,.0f", title=""),
+        legend=dict(orientation="h", y=1.08, x=0),
+        plot_bgcolor=WHITE, paper_bgcolor=WHITE,
+        font=dict(family="sans-serif", size=11),
+    )
+    return fig
+
+
+def chart_churn_risk_updated(cust_df):
+    """Churn risk distribution bar chart (non-locked customers only)."""
+    df = cust_df[cust_df["churn_risk"].notna()].copy()
+    if len(df) == 0:
+        return go.Figure().add_annotation(text="No data", showarrow=False)
+
+    counts = df["churn_risk"].astype(int).value_counts().sort_index().reindex([1,2,3,4,5], fill_value=0)
+    labels = {1: "1 – Very Low", 2: "2 – Low", 3: "3 – Medium", 4: "4 – High", 5: "5 – Very High"}
+    colors = [RISK_COLORS[i] for i in counts.index]
+
+    fig = go.Figure(go.Bar(
+        x=[labels[i] for i in counts.index],
+        y=counts.values,
+        marker_color=colors,
+        text=counts.values,
+        textposition="outside",
+    ))
+    fig.update_layout(
+        height=280, margin=dict(t=10, b=30, l=10, r=10),
+        xaxis_title="", yaxis_title="Customers",
+        plot_bgcolor=WHITE, paper_bgcolor=WHITE,
+        font=dict(family="sans-serif", size=11),
+    )
+    return fig
+
+
+def chart_pricing_today(line_df):
+    """Pricing landscape: actual unit price per product vs list/floor reference lines."""
+    df = line_df[line_df["is_active"]].copy() if "is_active" in line_df.columns else line_df.copy()
+    if len(df) == 0:
+        return go.Figure().add_annotation(text="No data", showarrow=False)
+
+    # Merge segment from customer df for color coding
+    seg_map = cust_all.set_index("stripe_customer_id")["segment"].to_dict()
+    df["segment"] = df["stripe_customer_id"].map(seg_map).fillna("D")
+
+    products = df["price_nickname"].dropna().unique().tolist()
+    fig = go.Figure()
+
+    seg_order = ["A", "B", "C", "D"]
+    for seg in seg_order:
+        sub = df[df["segment"] == seg]
+        if len(sub) == 0:
+            continue
+        fig.add_scatter(
+            x=sub["price_nickname"] + " " + (sub.index % 3).astype(str),
+            y=sub["unit_price"],
+            mode="markers",
+            name=f"Seg {seg}",
+            marker=dict(color=SEG_COLORS[seg], size=7, opacity=0.75,
+                        line=dict(color="white", width=0.5)),
+            customdata=sub[["price_nickname","unit_price","quantity"]].values,
+            hovertemplate="<b>%{customdata[0]}</b><br>Price: $%{customdata[1]:.2f}/mo<br>Qty: %{customdata[2]}<extra>Seg " + seg + "</extra>",
+        )
+
+    # Reference lines (list and floor per product)
+    for prod in ["Hiring", "HR", "Payroll"]:
+        sub = df[df["price_nickname"] == prod]
+        if len(sub) == 0:
+            continue
+        xs = sub["price_nickname"] + " " + (sub.index % 3).astype(str)
+        x_range = [xs.min(), xs.max()]
+        fig.add_shape(type="line", x0=x_range[0], x1=x_range[1],
+                      y0=LIST_PRICES[prod], y1=LIST_PRICES[prod],
+                      line=dict(color=GREEN, width=1.5, dash="dot"), xref="x", yref="y")
+        fig.add_shape(type="line", x0=x_range[0], x1=x_range[1],
+                      y0=FLOOR_PRICES[prod], y1=FLOOR_PRICES[prod],
+                      line=dict(color=RED, width=1.5, dash="dot"), xref="x", yref="y")
+
+    fig.update_layout(
+        height=320, margin=dict(t=10, b=30, l=10, r=10),
+        xaxis=dict(title="", tickangle=-30, showticklabels=False),
+        yaxis=dict(title="Monthly Price per Unit ($)"),
+        plot_bgcolor=WHITE, paper_bgcolor=WHITE,
+        legend=dict(orientation="h", y=1.08, x=0),
+        font=dict(family="sans-serif", size=11),
+    )
+    return fig
+
+
+def chart_segments_updated(cust_df):
+    """Segment distribution donut chart."""
+    if len(cust_df) == 0:
+        return go.Figure().add_annotation(text="No data", showarrow=False)
+    counts = cust_df["segment"].value_counts().reindex(["A","B","C","D"], fill_value=0)
+    fig = go.Figure(go.Pie(
+        labels=[f"Seg {s}" for s in counts.index],
+        values=counts.values,
+        hole=0.55,
+        marker_colors=[SEG_COLORS[s] for s in counts.index],
+        textinfo="label+percent",
+        hovertemplate="<b>Segment %{label}</b><br>Customers: %{value}<br>Share: %{percent}<extra></extra>",
+    ))
+    fig.update_layout(
+        height=260, margin=dict(t=10, b=10, l=10, r=10),
+        showlegend=False,
+        paper_bgcolor=WHITE,
+        font=dict(family="sans-serif", size=11),
+    )
+    return fig
+
+
+def chart_contract_status_updated(cust_df):
+    """Contract status distribution donut chart."""
+    if len(cust_df) == 0:
+        return go.Figure().add_annotation(text="No data", showarrow=False)
+    order  = ["Locked", "Expired M2M", "No Contract", "No SF Link"]
+    counts = cust_df["contract_status"].value_counts().reindex(order, fill_value=0)
+    fig = go.Figure(go.Pie(
+        labels=counts.index.tolist(),
+        values=counts.values,
+        hole=0.55,
+        marker_colors=[STATUS_COLORS[s] for s in counts.index],
+        textinfo="label+percent",
+        hovertemplate="<b>%{label}</b><br>Customers: %{value}<br>Share: %{percent}<extra></extra>",
+    ))
+    fig.update_layout(
+        height=260, margin=dict(t=10, b=10, l=10, r=10),
+        showlegend=False,
+        paper_bgcolor=WHITE,
+        font=dict(family="sans-serif", size=11),
+    )
+    return fig
+
+
+# ── Waterfall helper ──────────────────────────────────────────────────────────
+def waterfall_data(cust_df):
+    """Non-overlapping waterfall: floor recovery + seg B/C/D above-floor gaps."""
+    if len(cust_df) == 0:
+        return 0, 0, 0, 0, 0, 0
+
+    current_arr    = cust_df["annual_arr"].sum()
+    total_opp      = cust_df["revenue_opportunity"].sum()
+    floor_recovery = cust_df["floor_gap_annual"].sum()
+
+    def seg_above_floor(seg_label):
+        sub = cust_df[cust_df["segment"] == seg_label]
+        if len(sub) == 0:
+            return 0.0
+        return (sub["revenue_opportunity"] - sub["floor_gap_annual"]).clip(lower=0).sum()
+
+    sb = seg_above_floor("B")
+    sc = seg_above_floor("C")
+    sd = seg_above_floor("D")
+    potential_arr = current_arr + total_opp
+    return current_arr, floor_recovery, sb, sc, sd, potential_arr
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "📊 Data Overview",
-    "📋 Contract Status",
-    "👥 Customers & Segmentation",
-    "💲 Pricing Analysis",
-    "⚠️ Churn Risk",
-    "📈 Revenue Impact",
-])
+# PAGE 1 — EXECUTIVE SUMMARY
+# ═══════════════════════════════════════════════════════════════════════════════
+def page_executive_summary():
+    banner("Executive Summary",
+           "Should Workstream execute the pricing program?")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 1 — Data Overview
-# ─────────────────────────────────────────────────────────────────────────────
-with tab1:
-    _, sc, ss, sfa, sfc = load_raw()
-    df_line = build_line_df()
+    if len(cust) == 0:
+        empty_state("No data matches current filters.")
+        return
 
-    total_stripe   = df_line["stripe_customer_id"].nunique()
-    active_custs   = df_line[df_line["is_active"]]["stripe_customer_id"].nunique()
-    sf_linked_all  = df_line[df_line["has_sf"]]["stripe_customer_id"].nunique()
-    no_sf_all      = total_stripe - sf_linked_all
+    current_arr, floor_rec, sb, sc, sd, potential_arr = waterfall_data(cust)
+    total_opp    = potential_arr - current_arr
+    eligible     = cust[cust["contract_status"] != "Locked"]
+    high_risk    = cust[cust["churn_risk"] >= 4]
+    locked_custs = cust[cust["contract_status"] == "Locked"]
 
+    # Base case uplift at default retention (88/85/83%) using phase model
+    scored = cust[cust["phase"].notna()].copy()
+    scored["phase"] = scored["phase"].astype(int) if len(scored) > 0 else scored["phase"]
+    def ph_uplift(ph_num, ret):
+        ph = scored[scored["phase"] == ph_num] if len(scored) > 0 else pd.DataFrame()
+        if len(ph) == 0: return 0
+        below = ph[ph["pct_of_list"] < 1.0]
+        return ret * max(0, below["list_annual_arr"].sum() - below["annual_arr"].sum())
+    base_uplift = ph_uplift(1, 0.88) + ph_uplift(2, 0.85) + ph_uplift(3, 0.83)
+
+    # KPI row
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    with c1: kpi("Current ARR",      fmt_arr(current_arr),  f"{len(cust)} customers", "navy")
+    with c2: kpi("Potential ARR",     fmt_arr(potential_arr), "At list pricing", "green")
+    with c3: kpi("Base Case Uplift",  fmt_arr(base_uplift),  "88/85/83% retention", "green")
+    with c4: kpi("Eligible Customers",str(len(eligible)),    "Non-locked", "")
+    with c5: kpi("High Risk",         str(len(high_risk)),   "Score 4–5", "red")
+    with c6: kpi("Locked",            str(len(locked_custs)), "Under contract", "")
+
+    st.markdown("")
+
+    # Main visual row
+    col_left, col_right = st.columns([1, 1])
+
+    with col_left:
+        section("ARR Projection (12-Month Scenario)")
+        fig_proj = chart_arr_projection_updated(cust)
+        if len(cust) > 0:
+            st.plotly_chart(fig_proj, use_container_width=True)
+        else:
+            empty_state()
+
+    with col_right:
+        section("Revenue Opportunity Waterfall")
+        if current_arr > 0:
+            wf_measures = ["absolute", "relative", "relative", "relative", "relative", "total"]
+            wf_x = ["Current ARR", "Floor Recovery", "Seg B Opp", "Seg C Opp", "Seg D Opp", "Potential ARR"]
+            wf_y = [current_arr, floor_rec, sb, sc, sd, potential_arr]
+            fig_wf = go.Figure(go.Waterfall(
+                orientation="v",
+                measure=wf_measures,
+                x=wf_x,
+                y=wf_y,
+                connector=dict(line=dict(color=GRAY, width=1)),
+                increasing=dict(marker_color=GREEN),
+                decreasing=dict(marker_color=RED),
+                totals=dict(marker_color=PRIMARY),
+                text=[fmt_arr(v) for v in wf_y],
+                textposition="outside",
+            ))
+            fig_wf.update_layout(
+                height=280, margin=dict(t=10, b=30, l=10, r=10),
+                yaxis=dict(tickformat="$,.0f", title=""),
+                plot_bgcolor=WHITE, paper_bgcolor=WHITE,
+                font=dict(family="sans-serif", size=11),
+            )
+            st.plotly_chart(fig_wf, use_container_width=True)
+        else:
+            empty_state()
+
+    # Supporting row
+    st.markdown("")
+    col_left2, col_right2 = st.columns([1, 1])
+
+    with col_left2:
+        section("Customer Segments")
+        st.plotly_chart(chart_segments_updated(cust), use_container_width=True)
+
+    with col_right2:
+        section("Contract Status")
+        st.plotly_chart(chart_contract_status_updated(cust), use_container_width=True)
+
+    # Insight box
+    if total_opp > 0 and current_arr > 0:
+        pct_gap = total_opp / current_arr * 100
+        st.markdown(f"""
+        <div class="insight-box">
+          <b>Key Insight:</b> There is <b>{fmt_arr(total_opp)} ({pct_gap:.1f}%)</b> of annual pricing
+          opportunity across <b>{(len(cust[cust['segment']!='A']))} customers</b> priced below list.
+          Floor recovery alone represents <b>{fmt_arr(floor_rec)}</b>.
+          Base-case scenario delivers <b>{fmt_arr(base_uplift)}</b> with standard retention assumptions.
+        </div>""", unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PAGE 2 — PRICING OPPORTUNITY
+# ═══════════════════════════════════════════════════════════════════════════════
+def page_pricing_opportunity():
+    banner("Pricing Opportunity",
+           "Where is Workstream underpriced and by how much?")
+
+    if len(cust) == 0:
+        empty_state("No data matches current filters.")
+        return
+
+    # Hero chart
+    section("Pricing Today — Current Prices vs List and Floor Benchmarks")
+    active_f = active_lines[active_lines["is_active"]] if "is_active" in active_lines.columns else active_lines
+    if len(active_f) > 0:
+        st.plotly_chart(chart_pricing_today(active_f), use_container_width=True)
+    else:
+        empty_state()
+
+    # --- Opportunity by Product ---
+    st.markdown("")
+    section("Opportunity by Product")
+
+    prod_rows = []
+    prods_in_filter = [f_prod] if f_prod != "All" else ["Hiring", "HR", "Payroll"]
+    for prod in prods_in_filter:
+        prod_lines = active_lines[active_lines["price_nickname"] == prod] if "price_nickname" in active_lines.columns else pd.DataFrame()
+        if len(prod_lines) == 0:
+            continue
+        # Customers with this product
+        prod_cust_ids = prod_lines["stripe_customer_id"].unique()
+        prod_custs    = cust[cust["stripe_customer_id"].isin(prod_cust_ids)]
+
+        median_price  = prod_lines["unit_price"].median() if len(prod_lines) > 0 else 0
+        list_p        = LIST_PRICES.get(prod, 0)
+        floor_p       = FLOOR_PRICES.get(prod, 0)
+        opp_lines     = prod_lines[prod_lines["unit_price"] < list_p]
+        opportunity   = ((list_p - opp_lines["unit_price"]) * opp_lines["quantity"]).sum() * 12
+        arr_impact    = opportunity
+
+        prod_rows.append({
+            "Product":         prod,
+            "Customers":       len(prod_custs),
+            "Current Median":  f"${median_price:.2f}/mo",
+            "Floor Price":     f"${floor_p:.2f}/mo",
+            "List Price":      f"${list_p:.2f}/mo",
+            "Opportunity":     fmt_arr(opportunity),
+            "ARR Impact":      fmt_arr(arr_impact),
+        })
+
+    if prod_rows:
+        prod_df = pd.DataFrame(prod_rows)
+        col_p1, col_p2, col_p3 = st.columns(len(prod_rows))
+        cols = [col_p1, col_p2, col_p3][:len(prod_rows)]
+        for i, (_, row) in enumerate(prod_df.iterrows()):
+            with cols[i]:
+                st.markdown(f"""
+                <div class="kpi-card">
+                  <div class="kpi-label">{row['Product']}</div>
+                  <div style='font-size:12px;color:{GRAY};margin:6px 0 2px'>Current Median: <b style='color:{NAVY}'>{row['Current Median']}</b></div>
+                  <div style='font-size:12px;color:{GRAY}'>Floor: <b style='color:{AMBER}'>{row['Floor Price']}</b> &nbsp;|&nbsp; List: <b style='color:{GREEN}'>{row['List Price']}</b></div>
+                  <div style='margin-top:8px;font-size:13px;font-weight:700;color:{PRIMARY}'>ARR Impact: {row['ARR Impact']}</div>
+                  <div style='font-size:11px;color:{GRAY}'>{row['Customers']} customers with this product</div>
+                </div>""", unsafe_allow_html=True)
+    else:
+        empty_state()
+
+    # --- Opportunity by Segment ---
+    st.markdown("")
+    section("Opportunity by Segment")
+
+    seg_rows = []
+    for seg in ["A", "B", "C", "D"]:
+        sub = cust[cust["segment"] == seg]
+        if len(sub) == 0:
+            continue
+        seg_rows.append({
+            "Segment":   seg,
+            "Customers": len(sub),
+            "ARR":       fmt_arr(sub["annual_arr"].sum()),
+            "Opportunity": fmt_arr(sub["revenue_opportunity"].sum()),
+            "Avg % of List": f"{sub['pct_of_list'].mean()*100:.1f}%",
+        })
+
+    if seg_rows:
+        seg_df = pd.DataFrame(seg_rows)
+        st.dataframe(seg_df, use_container_width=True, hide_index=True, height=190)
+    else:
+        empty_state()
+
+    # --- Below Floor Customer Table ---
+    st.markdown("")
+    section("Customers Priced Below Floor")
+
+    bf_lines = active_lines[active_lines["below_floor"]].copy() if "below_floor" in active_lines.columns else pd.DataFrame()
+    if len(bf_lines) > 0:
+        seg_map  = cust.set_index("stripe_customer_id")["segment"].to_dict()
+        ae_map   = cust.set_index("stripe_customer_id")["account_ae"].to_dict()
+        name_map = cust.set_index("stripe_customer_id")["name"].to_dict()
+
+        bf_lines["Customer"]      = bf_lines["stripe_customer_id"].map(name_map).fillna("—")
+        bf_lines["AE"]            = bf_lines["stripe_customer_id"].map(ae_map).fillna("—")
+        bf_lines["Segment"]       = bf_lines["stripe_customer_id"].map(seg_map).fillna("—")
+        bf_lines["Product"]       = bf_lines["price_nickname"]
+        bf_lines["Current Price"] = bf_lines["unit_price"].round(2)
+        bf_lines["Floor Price"]   = bf_lines["floor_price"]
+        bf_lines["Gap"]           = (bf_lines["floor_price"] - bf_lines["unit_price"]).round(2)
+        bf_lines["ARR Impact"]    = ((bf_lines["floor_price"] - bf_lines["unit_price"]) * bf_lines["quantity"] * 12).round(0).astype(int)
+
+        display_bf = bf_lines[["Customer","AE","Segment","Product","Current Price","Floor Price","Gap","ARR Impact"]].copy()
+        display_bf = display_bf.sort_values("ARR Impact", ascending=False).reset_index(drop=True)
+
+        col_dl, _ = st.columns([1, 4])
+        with col_dl:
+            download_btn(display_bf, "⬇ Download CSV", "below_floor_customers.csv")
+
+        safe_table(display_bf, "below_floor", height=350)
+    else:
+        empty_state("No customers are priced below floor with current filters.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PAGE 3 — RISK & READINESS
+# ═══════════════════════════════════════════════════════════════════════════════
+def page_risk_readiness():
+    banner("Risk & Readiness",
+           "What risks block execution of the pricing program?")
+
+    if len(cust) == 0:
+        empty_state("No data matches current filters.")
+        return
+
+    no_csm     = cust[~cust["has_csm"]]
+    no_sf      = cust[~cust["has_sf"]]
+    no_contract= cust[cust["contract_status"].isin(["No Contract", "No SF Link"])]
+    high_risk  = cust[cust["churn_risk"] >= 4]
+
+    # KPI cards
     c1, c2, c3, c4 = st.columns(4)
-    with c1: metric_card("Total Stripe Customers", f"{total_stripe:,}", color=NAVY)
-    with c2: metric_card("Active Customers", f"{active_custs:,}", sub="Last billed ≤60d (monthly) / ≤400d (annual)", color=GREEN)
-    with c3: metric_card("Linked to Salesforce", f"{sf_linked_all:,}", sub=f"{sf_linked_all/total_stripe*100:.1f}% of total", color=PRIMARY)
-    with c4: metric_card("No SF Link", f"{no_sf_all:,}", sub=f"{no_sf_all/total_stripe*100:.1f}% of total", color=RED)
+    with c1: kpi("No CSM",            str(len(no_csm)),      "Customers without CSM", "red")
+    with c2: kpi("No Salesforce Link", str(len(no_sf)),       "Missing SF ID", "amber")
+    with c3: kpi("No Contract",        str(len(no_contract)), "No active contract", "amber")
+    with c4: kpi("High Risk",          str(len(high_risk)),   "Churn score 4–5", "red")
 
-    st.divider()
-    st.markdown(f'<div class="section-header">Source File Summary</div>', unsafe_allow_html=True)
-    src_tbl = pd.DataFrame({
-        "Source":    ["stripe_customers.csv", "stripe_subscriptions.csv", "sfdc_accounts.csv", "sfdc_contracts.csv"],
-        "Records":   [len(sc), len(ss), len(sfa), len(sfc)],
-        "Key Field": ["stripe_customer_id", "subscription_item_id", "account_id", "contract_id"],
-    })
-    st.dataframe(src_tbl, use_container_width=True, hide_index=True, height=178)
+    st.markdown("")
 
-    st.info(
-        "**How the join works:** Each Stripe customer is matched to a Salesforce account via "
-        "the `metadata_salesforce_id` field on the customer record. Salesforce contracts are then "
-        "joined to accounts via `account_id`, bringing contract dates and ACV into a single row "
-        "for every subscription line item."
-    )
+    # Main charts
+    col_left, col_right = st.columns(2)
+    with col_left:
+        section("Churn Risk Distribution")
+        st.plotly_chart(chart_churn_risk_updated(cust), use_container_width=True)
 
-    st.divider()
-    st.markdown(f'<div class="section-header">Subscription Lines by Product (Active)</div>', unsafe_allow_html=True)
-    active_lines = df_line[df_line["is_active"]]
-    prod_stats = (
-        active_lines.groupby("price_nickname")
-        .agg(line_count=("subscription_item_id","count"), arr=("monthly_rev", lambda x: x.sum()*12))
-        .reindex(["Hiring","HR","Payroll"]).reset_index()
-    )
-    fig_prod = go.Figure()
-    fig_prod.add_bar(x=prod_stats["price_nickname"], y=prod_stats["line_count"],
-                     name="Line Count", marker_color=PRIMARY)
-    fig_prod.add_bar(x=prod_stats["price_nickname"], y=prod_stats["arr"]/1000,
-                     name="ARR ($K)", marker_color=GREEN, yaxis="y2")
-    fig_prod.update_layout(
-        barmode="group", height=320, margin=dict(t=20,b=20,l=20,r=20),
-        yaxis=dict(title="Line Count", color=NAVY),
-        yaxis2=dict(title="ARR ($K)", overlaying="y", side="right", color=GREEN),
-        legend=dict(orientation="h", y=1.08),
-        plot_bgcolor=BG, paper_bgcolor="white",
-    )
-    st.plotly_chart(fig_prod, use_container_width=True)
+    with col_right:
+        section("Contract Status Distribution")
+        st.plotly_chart(chart_contract_status_updated(cust), use_container_width=True)
 
-    with st.expander(f"🔗 {no_sf_all} Customers with No Salesforce Link"):
-        no_sf_mask = df_line["has_sf"] == False
-        no_sf_custs = (
-            df_line[no_sf_mask]
-            .groupby("stripe_customer_id")
-            .agg(
-                name=("name","first"),
-                email=("email","first"),
-                last_billing_date=("last_billing_date","max"),
-                monthly_mrr=("monthly_rev","sum"),
-            ).reset_index()
-            .rename(columns={"stripe_customer_id":"Stripe ID","name":"Name","email":"Email",
-                              "last_billing_date":"Last Billing","monthly_mrr":"Monthly MRR"})
+    # Renewal pipeline
+    st.markdown("")
+    section("Renewal Pipeline (Locked Customers by Expiry)")
+
+    locked = cust[cust["contract_status"] == "Locked"].copy()
+    if len(locked) > 0:
+        bucket_order = ["0–3 Months", "3–6 Months", "6–12 Months", "12+ Months"]
+        renewal_df   = (
+            locked[locked["renewal_bucket"].notna()]
+            .groupby("renewal_bucket")
+            .agg(Customers=("annual_arr","count"), ARR=("annual_arr","sum"))
+            .reindex(bucket_order, fill_value=0)
+            .reset_index()
+            .rename(columns={"renewal_bucket":"Renewal Window"})
         )
-        no_sf_custs["Monthly MRR"] = no_sf_custs["Monthly MRR"].map("${:,.2f}".format)
-        no_sf_disp = searchable_table(no_sf_custs, "no_sf")
-        download_btn(no_sf_custs, "Download No-SF Customers", "no_sf_customers.csv")
+        renewal_df["ARR"] = renewal_df["ARR"].apply(fmt_arr)
+
+        cols = st.columns(4)
+        for i, row in renewal_df.iterrows():
+            variant = "red" if row["Renewal Window"] == "0–3 Months" else ("amber" if row["Renewal Window"] == "3–6 Months" else "")
+            with cols[i % 4]:
+                kpi(row["Renewal Window"], str(row["Customers"]) + " customers", row["ARR"] + " ARR", variant)
+    else:
+        empty_state("No locked customers with current filters.")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 2 — Contract Status
-# ─────────────────────────────────────────────────────────────────────────────
-with tab2:
-    locked  = cust[cust["contract_status"] == "Locked"]
-    expired = cust[cust["contract_status"] == "Expired M2M"]
-    no_cont = cust[cust["contract_status"].isin(["No Contract","No SF Link"])]
-    no_sf   = cust[cust["contract_status"] == "No SF Link"]
+# ═══════════════════════════════════════════════════════════════════════════════
+# PAGE 4 — ACTION CENTER
+# ═══════════════════════════════════════════════════════════════════════════════
+def page_action_center():
+    banner("Action Center",
+           "Who should Workstream target first and what is the expected impact?")
 
-    c1,c2,c3,c4 = st.columns(4)
-    with c1: metric_card("Locked", f"{len(locked):,}", f"${locked['annual_arr'].sum():,.0f} ARR", color=PRIMARY)
-    with c2: metric_card("Expired M2M", f"{len(expired):,}", f"${expired['annual_arr'].sum():,.0f} ARR", color=YELLOW)
-    with c3: metric_card("No Contract", f"{len(no_cont):,}", f"${no_cont['annual_arr'].sum():,.0f} ARR", color=GRAY)
-    with c4: metric_card("No SF Link", f"{len(no_sf):,}", f"${no_sf['annual_arr'].sum():,.0f} ARR", color=RED)
+    if len(cust) == 0:
+        empty_state("No data matches current filters.")
+        return
 
-    st.divider()
-    col_l, col_r = st.columns(2)
+    # --- Customer Prioritization Matrix ---
+    section("Customer Prioritization Matrix — Risk vs Opportunity")
+    scored_m = cust[cust["churn_risk"].notna()].copy()
 
-    with col_l:
-        st.markdown(f'<div class="section-header">Contract Status by Segment</div>', unsafe_allow_html=True)
-        stacked = (
-            cust.groupby(["segment","contract_status"])["stripe_customer_id"]
-            .count().reset_index(name="count")
-        )
-        statuses = ["Locked","Expired M2M","No Contract","No SF Link"]
-        fig_stacked = go.Figure()
-        for st_ in statuses:
-            sub = stacked[stacked["contract_status"] == st_]
-            fig_stacked.add_bar(
-                y=sub["segment"], x=sub["count"], orientation="h",
-                name=st_, marker_color=STATUS_COLORS.get(st_, GRAY)
-            )
-        fig_stacked.update_layout(
-            barmode="stack", height=300, margin=dict(t=20,b=20,l=20,r=20),
-            legend=dict(orientation="h", y=1.08),
-            plot_bgcolor=BG, paper_bgcolor="white",
-            xaxis_title="Customers", yaxis_title="Segment",
-        )
-        st.plotly_chart(fig_stacked, use_container_width=True)
-
-    with col_r:
-        st.markdown(f'<div class="section-header">Customers by Contract Status</div>', unsafe_allow_html=True)
-        donut_data = cust.groupby("contract_status")["stripe_customer_id"].count().reset_index()
-        fig_donut = go.Figure(go.Pie(
-            labels=donut_data["contract_status"],
-            values=donut_data["stripe_customer_id"],
-            hole=0.55,
-            marker_colors=[STATUS_COLORS.get(s, GRAY) for s in donut_data["contract_status"]],
-        ))
-        fig_donut.update_layout(
-            height=300, margin=dict(t=20,b=20,l=20,r=20),
-            legend=dict(orientation="h", y=-0.1),
-            paper_bgcolor="white",
-        )
-        st.plotly_chart(fig_donut, use_container_width=True)
-
-    st.divider()
-    st.markdown(f'<div class="section-header">Locked Renewal Pipeline</div>', unsafe_allow_html=True)
-    now = REF_DATE
-    def months_to_expiry(d):
-        if pd.isna(d): return np.nan
-        return (d - now).days / 30.44
-
-    locked2 = locked.copy()
-    locked2["months_left"] = locked2["end_date"].apply(months_to_expiry)
-
-    def bucket(m):
-        if pd.isna(m):  return "12+mo"
-        if m <= 3:       return "≤3mo"
-        elif m <= 6:     return "3-6mo"
-        elif m <= 12:    return "6-12mo"
-        else:            return "12+mo"
-
-    locked2["bucket"] = locked2["months_left"].apply(bucket)
-    pipeline = (
-        locked2.groupby("bucket")
-        .agg(customers=("stripe_customer_id","count"), arr=("annual_arr","sum"))
-        .reindex(["≤3mo","3-6mo","6-12mo","12+mo"]).reset_index()
-        .rename(columns={"bucket":"Renewal Window","customers":"Customers","arr":"Annual ARR"})
-    )
-    pipeline["Annual ARR"] = pipeline["Annual ARR"].map("${:,.0f}".format)
-    st.dataframe(pipeline, use_container_width=True, hide_index=True, height=178)
-
-    st.divider()
-    st.markdown(f'<div class="section-header">All Customers</div>', unsafe_allow_html=True)
-    disp = cust[["name","account_ae","segment","contract_status","end_date","monthly_mrr","annual_arr"]].copy()
-    disp.columns = ["Name","AE","Segment","Contract Status","Contract End","Monthly MRR","Annual ARR"]
-    disp["Monthly MRR"] = disp["Monthly MRR"].map("${:,.2f}".format)
-    disp["Annual ARR"]  = disp["Annual ARR"].map("${:,.0f}".format)
-    disp["Contract End"]= disp["Contract End"].dt.strftime("%Y-%m-%d").fillna("—")
-    _ = searchable_table(disp, "contracts")
-    download_btn(disp, "Download Contract Data", "contract_status.csv")
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 3 — Customers & Segmentation
-# ─────────────────────────────────────────────────────────────────────────────
-with tab3:
-    total_active   = len(cust_all)   # unfiltered active
-    # Churned = all customers that were ever in stripe but not active
-    df_line_all = build_line_df()
-    all_cust_ids    = df_line_all["stripe_customer_id"].nunique()
-    active_cust_ids = df_line_all[df_line_all["is_active"]]["stripe_customer_id"].nunique()
-    churned_count   = all_cust_ids - active_cust_ids
-
-    c1, c2 = st.columns(2)
-    with c1:
-        metric_card("Active Customers", f"{active_cust_ids:,}",
-                    f"{active_cust_ids/all_cust_ids*100:.1f}% of total", color=GREEN)
-    with c2:
-        metric_card("Churned / Inactive", f"{churned_count:,}",
-                    f"{churned_count/all_cust_ids*100:.1f}% of total", color=RED)
-
-    st.info(
-        "**Segments:** A = ≥100% of list price · B = 90-99% · C = 75-89% · D = <75%  "
-        "Weighted avg % of list = Σ(unit_price × qty) / Σ(list_price × qty) per customer."
-    )
-
-    seg_stats = (
-        cust.groupby("segment")
-        .agg(
-            count=("stripe_customer_id","count"),
-            arr=("annual_arr","sum"),
-            avg_pct=("pct_of_list","mean"),
-            non_locked=("contract_status", lambda x: (x != "Locked").sum()),
-        ).reindex(["A","B","C","D"]).reset_index()
-    )
-    cols = st.columns(4)
-    for i, row in seg_stats.iterrows():
-        if pd.isna(row["count"]): continue
-        with cols[i]:
-            metric_card(
-                f"Segment {row['segment']}",
-                f"{int(row['count']):,} customers",
-                f"${row['arr']:,.0f} ARR · {row['avg_pct']*100:.1f}% of list · {int(row['non_locked'])} non-locked",
-                color=SEG_COLORS.get(row["segment"], GRAY),
-            )
-
-    st.divider()
-    col_l, col_r = st.columns(2)
-
-    with col_l:
-        st.markdown(f'<div class="section-header">Customers & ARR by Segment</div>', unsafe_allow_html=True)
-        fig_seg = go.Figure()
-        fig_seg.add_bar(x=seg_stats["segment"], y=seg_stats["count"],
-                        name="Customers", marker_color=[SEG_COLORS.get(s, GRAY) for s in seg_stats["segment"]])
-        fig_seg.add_bar(x=seg_stats["segment"], y=seg_stats["arr"]/1000,
-                        name="ARR ($K)", marker_color=NAVY, yaxis="y2")
-        fig_seg.update_layout(
-            barmode="group", height=320, margin=dict(t=20,b=20,l=20,r=20),
-            yaxis=dict(title="Customers"),
-            yaxis2=dict(title="ARR ($K)", overlaying="y", side="right", color=NAVY),
-            legend=dict(orientation="h", y=1.08),
-            plot_bgcolor=BG, paper_bgcolor="white",
-        )
-        st.plotly_chart(fig_seg, use_container_width=True)
-
-    with col_r:
-        st.markdown(f'<div class="section-header">MRR vs % of List (by Segment)</div>', unsafe_allow_html=True)
-        fig_scatter = px.scatter(
-            cust, x="monthly_mrr", y=cust["pct_of_list"]*100,
+    if len(scored_m) > 0:
+        scored_m["risk_label"] = "Risk " + scored_m["churn_risk"].astype(int).astype(str)
+        fig_matrix = px.scatter(
+            scored_m,
+            x="churn_risk",
+            y="revenue_opportunity",
+            size="annual_arr",
             color="segment",
             color_discrete_map=SEG_COLORS,
-            hover_data={"name":True,"account_ae":True,"segment":True,"monthly_mrr":":.2f"},
-            labels={"monthly_mrr":"Monthly MRR ($)","y":"% of List Price","segment":"Segment"},
-            height=320,
+            hover_name="name",
+            hover_data={"annual_arr": ":$,.0f", "pct_of_list": ":.1%",
+                        "contract_status": True, "churn_risk": True,
+                        "segment": False},
+            labels={
+                "churn_risk":          "Churn Risk Score (1=Low, 5=High)",
+                "revenue_opportunity": "Revenue Opportunity (Annual $)",
+                "annual_arr":          "Current ARR",
+                "segment":             "Segment",
+            },
+            size_max=40,
         )
-        fig_scatter.update_layout(
-            margin=dict(t=20,b=20,l=20,r=20), plot_bgcolor=BG, paper_bgcolor="white"
+        fig_matrix.update_layout(
+            height=380, margin=dict(t=10, b=30, l=10, r=10),
+            yaxis=dict(tickformat="$,.0f"),
+            xaxis=dict(tickvals=[1, 2, 3, 4, 5]),
+            plot_bgcolor=BG, paper_bgcolor=WHITE,
+            legend=dict(orientation="h", y=1.05),
+            font=dict(family="sans-serif", size=11),
         )
-        fig_scatter.update_traces(marker_size=7)
-        st.plotly_chart(fig_scatter, use_container_width=True)
+        st.plotly_chart(fig_matrix, use_container_width=True)
+    else:
+        empty_state("Churn risk data unavailable with current filters (check if Contract Status = Locked).")
 
-    st.divider()
-    st.markdown(f'<div class="section-header">Customer Detail</div>', unsafe_allow_html=True)
-    disp3 = cust[["name","account_ae","csm_name","segment","products","pct_of_list",
-                   "monthly_mrr","annual_arr","contract_status","churn_risk"]].copy()
-    disp3.columns = ["Name","AE","CSM","Segment","Products","% of List",
-                     "Monthly MRR","Annual ARR","Contract Status","Churn Risk"]
-    disp3["% of List"]    = (disp3["% of List"]*100).map("{:.1f}%".format)
-    disp3["Monthly MRR"]  = disp3["Monthly MRR"].map("${:,.2f}".format)
-    disp3["Annual ARR"]   = disp3["Annual ARR"].map("${:,.0f}".format)
-    disp3["Churn Risk"]   = disp3["Churn Risk"].apply(lambda x: f"{int(x)}" if pd.notna(x) else "—")
-    _ = searchable_table(disp3, "segmentation", height=450)
-    download_btn(disp3, "Download Customer Detail", "customers.csv")
+    # --- Opportunity by AE ---
+    st.markdown("")
+    section("Opportunity by AE Owner")
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 4 — Pricing Analysis
-# ─────────────────────────────────────────────────────────────────────────────
-with tab4:
-    df_line_a = build_line_df()
-    df_line_a = df_line_a[df_line_a["is_active"]]
-
-    # Filter line-level by active customer IDs after sidebar filter
-    active_ids = set(cust["stripe_customer_id"].tolist())
-    lines_f = df_line_a[df_line_a["stripe_customer_id"].isin(active_ids)]
-
-    c1, c2, c3 = st.columns(3)
-    for col, prod in zip([c1,c2,c3], ["Hiring","HR","Payroll"]):
-        prod_lines = lines_f[lines_f["price_nickname"] == prod]
-        med = prod_lines["unit_price"].median()
-        pct = med / LIST_PRICES[prod] * 100
-        with col:
-            metric_card(f"{prod} Median Price", f"${med:.2f}",
-                        f"{pct:.1f}% of list (${LIST_PRICES[prod]:.0f})", color=PRIMARY)
-
-    st.divider()
-    col_l, col_r = st.columns([3,2])
-
-    with col_l:
-        st.markdown(f'<div class="section-header">Distribution: % of List Price (Active Customers)</div>', unsafe_allow_html=True)
-        pct_vals = cust["pct_of_list"].dropna() * 100
-        fig_hist = go.Figure()
-        # Colour zones
-        x_range = np.linspace(pct_vals.min()*0.98, pct_vals.max()*1.02, 300)
-        bins = np.histogram(pct_vals, bins=40)
-        bin_centers = (bins[1][:-1] + bins[1][1:]) / 2
-        bin_counts  = bins[0]
-        colors_hist = []
-        for bc in bin_centers:
-            if bc < 80:   colors_hist.append(RED)
-            elif bc < 100:colors_hist.append(YELLOW)
-            else:         colors_hist.append(GREEN)
-
-        fig_hist.add_bar(x=bin_centers, y=bin_counts, marker_color=colors_hist, showlegend=False)
-        for x_val, label, lcolor in [
-            (80, "Floor ≈80%", RED),
-            (100, "List = 100%", GREEN),
-        ]:
-            fig_hist.add_vline(x=x_val, line_dash="dash", line_color=lcolor,
-                               annotation_text=label, annotation_font_color=lcolor)
-        fig_hist.update_layout(
-            height=320, margin=dict(t=20,b=20,l=20,r=20),
-            xaxis_title="% of List Price", yaxis_title="Customers",
-            plot_bgcolor=BG, paper_bgcolor="white",
+    ae_df = (
+        cust[cust["account_ae"] != "—"]
+        .groupby("account_ae")
+        .agg(
+            Customers     = ("annual_arr",          "count"),
+            ARR           = ("annual_arr",          "sum"),
+            Opportunity   = ("revenue_opportunity", "sum"),
         )
-        st.plotly_chart(fig_hist, use_container_width=True)
+        .reset_index()
+        .rename(columns={"account_ae": "AE Owner"})
+        .sort_values("Opportunity", ascending=False)
+    )
+    if len(ae_df) > 0:
+        ae_display = ae_df.copy()
+        ae_display["ARR"]         = ae_display["ARR"].apply(fmt_arr)
+        ae_display["Opportunity"] = ae_display["Opportunity"].apply(fmt_arr)
+        st.dataframe(ae_display, use_container_width=True, hide_index=True, height=210)
+    else:
+        empty_state()
 
-    with col_r:
-        st.markdown(f'<div class="section-header">Pricing Summary by Product</div>', unsafe_allow_html=True)
-        for prod in ["Hiring","HR","Payroll"]:
-            prod_lines = lines_f[lines_f["price_nickname"] == prod]
-            avg_price   = prod_lines["unit_price"].mean()
-            pct_below_fl= (prod_lines["unit_price"] < FLOOR_PRICES[prod]).mean() * 100
-            pct_at_list = (prod_lines["unit_price"] >= LIST_PRICES[prod]).mean() * 100
-            pct_above_l = (prod_lines["unit_price"] > LIST_PRICES[prod]).mean() * 100
-            st.markdown(f"**{prod}** — avg ${avg_price:.2f}/unit")
-            st.markdown(
-                f"Below floor: `{pct_below_fl:.1f}%` · "
-                f"At list: `{pct_at_list:.1f}%` · "
-                f"Above list: `{pct_above_l:.1f}%`"
+    # --- Priority Customers Table ---
+    st.markdown("")
+    section("Priority Customers")
+
+    priority_df = cust[cust["revenue_opportunity"] > 0].copy()
+    priority_df = priority_df.sort_values("revenue_opportunity", ascending=False)
+
+    if len(priority_df) > 0:
+        def risk_badge(r):
+            if pd.isna(r): return "—"
+            r = int(r)
+            if r <= 2: return f"🟢 {r}"
+            elif r == 3: return f"🟡 {r}"
+            else: return f"🔴 {r}"
+
+        display_prio = pd.DataFrame({
+            "Customer":          priority_df["name"].values,
+            "AE":                priority_df["account_ae"].values,
+            "CSM":               priority_df["csm_name"].values,
+            "Segment":           priority_df["segment"].values,
+            "ARR":               priority_df["annual_arr"].apply(fmt_arr).values,
+            "Risk Score":        priority_df["churn_risk"].apply(risk_badge).values,
+            "Contract Status":   priority_df["contract_status"].values,
+            "Recommended Action":priority_df["recommended_action"].values,
+            "Expected ARR Impact":priority_df["revenue_opportunity"].apply(fmt_arr).values,
+        })
+
+        col_dl, _ = st.columns([1, 4])
+        with col_dl:
+            download_btn(
+                priority_df[["name","account_ae","csm_name","segment","annual_arr",
+                              "churn_risk","contract_status","recommended_action","revenue_opportunity"]],
+                "⬇ Download CSV", "priority_customers.csv"
             )
-            st.divider()
+        safe_table(display_prio, "priority", height=400)
+    else:
+        empty_state("No customers with pricing opportunity under current filters.")
 
-    st.divider()
-    floor_total   = cust["floor_gap_annual"].sum()
-    floor_by_prod = (
-        lines_f[lines_f["below_floor"]]
-        .groupby("price_nickname")
-        .agg(gap=("floor_gap_monthly", lambda x: x.sum()*12))
-        .reindex(["Hiring","HR","Payroll"])
-    )
+    # ── Scenario Modeling ─────────────────────────────────────────────────────
+    st.markdown("")
+    st.markdown(f'<div class="page-banner"><h2>Scenario Modeling</h2><p>Adjust retention rates to model revenue impact by phase</p></div>', unsafe_allow_html=True)
 
-    st.markdown(f'<div class="section-header">Below-Floor Pricing Impact</div>', unsafe_allow_html=True)
-    c1,c2,c3,c4 = st.columns(4)
-    with c1: metric_card("Total Annual Floor Gap", f"${floor_total:,.0f}", color=RED)
-    for col, prod in zip([c2,c3,c4], ["Hiring","HR","Payroll"]):
-        gap = floor_by_prod.loc[prod, "gap"] if prod in floor_by_prod.index else 0
-        with col: metric_card(f"{prod} Floor Gap", f"${gap:,.0f}", color=YELLOW)
-
-    # Below-floor customer table (line-level)
-    bf_lines = lines_f[lines_f["below_floor"]].copy()
-    bf_lines["gap_per_unit"]  = bf_lines["floor_price"] - bf_lines["unit_price"]
-    bf_lines["annual_gap"]    = bf_lines["gap_per_unit"] * bf_lines["quantity"] * 12
-    bf_lines["name"]          = bf_lines["stripe_customer_id"].map(
-        build_line_df()[build_line_df()["is_active"]].groupby("stripe_customer_id")["name"].first()
-    )
-    ae_map = cust.set_index("stripe_customer_id")["account_ae"]
-    bf_lines["ae"] = bf_lines["stripe_customer_id"].map(ae_map)
-    disp4 = bf_lines[["name","ae","price_nickname","unit_price","floor_price","gap_per_unit","annual_gap"]].copy()
-    disp4.columns = ["Name","AE","Product","Current Price","Floor Price","Gap/Unit","Annual Gap"]
-    disp4["Current Price"]= disp4["Current Price"].map("${:.2f}".format)
-    disp4["Floor Price"]  = disp4["Floor Price"].map("${:.2f}".format)
-    disp4["Gap/Unit"]     = disp4["Gap/Unit"].map("${:.2f}".format)
-    disp4["Annual Gap"]   = disp4["Annual Gap"].map("${:,.0f}".format)
-    st.markdown(f'<div class="section-header">Below-Floor Customers</div>', unsafe_allow_html=True)
-    _ = searchable_table(disp4, "below_floor", height=380)
-    download_btn(disp4, "Download Below-Floor Data", "below_floor.csv")
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 5 — Churn Risk
-# ─────────────────────────────────────────────────────────────────────────────
-with tab5:
-    scored = cust[cust["churn_risk"].notna()].copy()
-    scored["churn_risk"] = scored["churn_risk"].astype(int)
-
-    eligible    = len(scored)
-    high_risk   = scored[scored["churn_risk"] >= 4]
-    med_risk    = scored[scored["churn_risk"] == 3]
-    no_csm_high = high_risk[~high_risk["has_csm"]]
-
-    c1,c2,c3,c4 = st.columns(4)
-    with c1: metric_card("Eligible Scored", f"{eligible:,}", "Non-locked active", color=NAVY)
-    with c2: metric_card("High Risk (4+5)", f"{len(high_risk):,}",
-                         f"{len(high_risk)/eligible*100:.1f}% of eligible", color=RED)
-    with c3: metric_card("No CSM (High Risk)", f"{len(no_csm_high):,}",
-                         f"{len(no_csm_high)/len(high_risk)*100:.1f}% of high risk", color=YELLOW)
-    with c4: metric_card("Medium Risk (3)", f"{len(med_risk):,}",
-                         f"{len(med_risk)/eligible*100:.1f}% of eligible", color=GRAY)
-
-    st.divider()
-    col_l, col_r = st.columns(2)
-
-    with col_l:
-        st.markdown(f'<div class="section-header">Customers by Churn Risk Score</div>', unsafe_allow_html=True)
-        score_counts = scored.groupby("churn_risk")["stripe_customer_id"].count().reset_index()
-        score_colors = {1:GREEN, 2:"#7BC47F", 3:YELLOW, 4:"#FF8C42", 5:RED}
-        fig_bar_risk = go.Figure(go.Bar(
-            x=score_counts["churn_risk"].astype(str),
-            y=score_counts["stripe_customer_id"],
-            marker_color=[score_colors.get(s, GRAY) for s in score_counts["churn_risk"]],
-        ))
-        fig_bar_risk.update_layout(
-            height=300, margin=dict(t=20,b=20,l=20,r=20),
-            xaxis_title="Churn Risk Score", yaxis_title="Customers",
-            plot_bgcolor=BG, paper_bgcolor="white",
-        )
-        st.plotly_chart(fig_bar_risk, use_container_width=True)
-
-    with col_r:
-        st.markdown(f'<div class="section-header">MRR vs Churn Risk (by Segment)</div>', unsafe_allow_html=True)
-        fig_s2 = px.scatter(
-            scored, x="monthly_mrr", y="churn_risk",
-            color="segment", color_discrete_map=SEG_COLORS,
-            hover_data={"name":True,"account_ae":True,"churn_risk":True},
-            labels={"monthly_mrr":"Monthly MRR ($)","churn_risk":"Churn Risk Score","segment":"Segment"},
-            height=300,
-        )
-        fig_s2.update_layout(
-            margin=dict(t=20,b=20,l=20,r=20), plot_bgcolor=BG, paper_bgcolor="white"
-        )
-        fig_s2.update_traces(marker_size=7)
-        st.plotly_chart(fig_s2, use_container_width=True)
-
-    st.divider()
-    st.markdown(f'<div class="section-header">High Risk Customers (Score 4+5)</div>', unsafe_allow_html=True)
-    disp5 = high_risk[["name","account_ae","csm_name","segment","monthly_mrr",
-                        "churn_risk","primary_risk"]].copy()
-    disp5.columns = ["Name","AE","CSM","Segment","Monthly MRR","Score","Primary Risk Factor"]
-    disp5["Monthly MRR"] = disp5["Monthly MRR"].map("${:,.2f}".format)
-    disp5 = disp5.sort_values("Score", ascending=False)
-    _ = searchable_table(disp5, "high_risk", height=380)
-    download_btn(disp5, "Download High Risk Customers", "high_risk.csv")
-
-    st.divider()
-    st.markdown(f'<div class="section-header">Locked Renewal Pipeline</div>', unsafe_allow_html=True)
-    locked_t5 = cust[cust["contract_status"] == "Locked"].copy()
-    locked_t5["months_left"] = locked_t5["end_date"].apply(
-        lambda d: (d - REF_DATE).days / 30.44 if pd.notna(d) else np.nan
-    )
-    def bucket5(m):
-        if pd.isna(m):  return "12+mo"
-        if m <= 3:       return "≤3mo"
-        elif m <= 6:     return "3-6mo"
-        elif m <= 12:    return "6-12mo"
-        else:            return "12+mo"
-    locked_t5["bucket"] = locked_t5["months_left"].apply(bucket5)
-    pipeline5 = (
-        locked_t5.groupby("bucket")
-        .agg(customers=("stripe_customer_id","count"), arr=("annual_arr","sum"))
-        .reindex(["≤3mo","3-6mo","6-12mo","12+mo"]).reset_index()
-        .rename(columns={"bucket":"Renewal Window","customers":"Customers","arr":"Annual ARR"})
-    )
-    pipeline5["Annual ARR"] = pipeline5["Annual ARR"].map("${:,.0f}".format)
-    st.dataframe(pipeline5, use_container_width=True, hide_index=True, height=178)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 6 — Revenue Impact
-# ─────────────────────────────────────────────────────────────────────────────
-with tab6:
-    # Phases: 1=low risk (score 1+2), 2=medium (score 3), 3=high (score 4+5)
-    ph_ret = {1: ph1_ret, 2: ph2_ret, 3: ph3_ret}
+    col_s1, col_s2, col_s3 = st.columns(3)
+    with col_s1:
+        ph1_ret = st.slider("Phase 1 Retention (Score 1–2)", 0, 100, 88, format="%d%%", key="ph1") / 100
+    with col_s2:
+        ph2_ret = st.slider("Phase 2 Retention (Score 3)",   0, 100, 85, format="%d%%", key="ph2") / 100
+    with col_s3:
+        ph3_ret = st.slider("Phase 3 Retention (Score 4–5)", 0, 100, 83, format="%d%%", key="ph3") / 100
 
     scored6 = cust[cust["phase"].notna()].copy()
-    scored6["phase"] = scored6["phase"].astype(int)
+    scored6["phase"] = scored6["phase"].astype(int) if len(scored6) > 0 else scored6["phase"]
+    locked_arr   = cust[cust["contract_status"] == "Locked"]["annual_arr"].sum()
+    baseline_arr = cust["annual_arr"].sum()
 
-    locked_arr = cust[cust["contract_status"] == "Locked"]["annual_arr"].sum()
-
-    # Partial-capture model: all customers stay, but we close retention% of the pricing gap.
-    # Scenario uplift = retention × max_uplift (no churn assumed).
-    def phase_scenario(phase_num, ret_rate):
-        ph_custs = scored6[scored6["phase"] == phase_num]
-        below    = ph_custs[ph_custs["pct_of_list"] < 1.0]
-        current_arr  = ph_custs["annual_arr"].sum()
-        max_uplift   = max(0, below["list_annual_arr"].sum() - below["annual_arr"].sum())
-        scenario_uplift = ret_rate * max_uplift
+    def phase_scenario(ph_num, ret):
+        ph    = scored6[scored6["phase"] == ph_num] if len(scored6) > 0 else pd.DataFrame()
+        if len(ph) == 0:
+            return {"customers": 0, "current_arr": 0.0, "potential_arr": 0.0, "incremental_arr": 0.0, "retention": ret}
+        below     = ph[ph["pct_of_list"] < 1.0]
+        curr      = ph["annual_arr"].sum()
+        max_up    = max(0, below["list_annual_arr"].sum() - below["annual_arr"].sum())
+        pot_arr   = curr + max_up
+        sc_uplift = ret * max_up
         return {
-            "customers":      len(ph_custs),
-            "current_arr":    current_arr,
-            "max_uplift":     max_uplift,
-            "scenario_uplift": scenario_uplift,
+            "customers":      len(ph),
+            "current_arr":    curr,
+            "potential_arr":  pot_arr,
+            "incremental_arr":sc_uplift,
+            "retention":      ret,
         }
 
-    ph_results = {i: phase_scenario(i, ph_ret[i]) for i in [1,2,3]}
+    ph_ret_map  = {1: ph1_ret, 2: ph2_ret, 3: ph3_ret}
+    ph_results  = {i: phase_scenario(i, ph_ret_map[i]) for i in [1, 2, 3]}
+    total_incr  = sum(ph_results[i]["incremental_arr"] for i in [1, 2, 3])
+    projected   = locked_arr + sum(ph_results[i]["current_arr"] + ph_results[i]["incremental_arr"] for i in [1, 2, 3])
+    pct_uplift  = total_incr / baseline_arr * 100 if baseline_arr > 0 else 0
 
-    baseline_arr  = cust["annual_arr"].sum()
-    projected_arr = (
-        locked_arr
-        + sum(ph_results[i]["current_arr"] + ph_results[i]["scenario_uplift"]
-              for i in [1,2,3])
+    # Scenario KPIs
+    sc1, sc2, sc3, sc4 = st.columns(4)
+    with sc1: kpi("Current ARR",    fmt_arr(baseline_arr), "",              "navy")
+    with sc2: kpi("Projected ARR",  fmt_arr(projected),    "After scenario","green")
+    with sc3: kpi("Incremental ARR",fmt_arr(total_incr),   "Net new revenue","green")
+    with sc4: kpi("% Uplift",       f"{pct_uplift:.1f}%",  "On current ARR","")
+
+    # ARR Projection chart with live slider values
+    st.markdown("")
+    section("ARR Trajectory (12-Month Ramp)")
+    st.plotly_chart(
+        chart_arr_projection_updated(cust, ph1_ret, ph2_ret, ph3_ret),
+        use_container_width=True,
     )
-    incremental   = projected_arr - baseline_arr
-    pct_uplift    = incremental / baseline_arr * 100 if baseline_arr > 0 else 0
 
-    c1,c2,c3,c4 = st.columns(4)
-    with c1: metric_card("Baseline ARR",   f"${baseline_arr:,.0f}",  color=NAVY)
-    with c2: metric_card("Projected ARR",  f"${projected_arr:,.0f}", color=PRIMARY)
-    with c3: metric_card("Incremental ARR",f"${incremental:,.0f}",   color=GREEN if incremental >= 0 else RED)
-    with c4: metric_card("% Uplift",       f"{pct_uplift:.1f}%",     color=PRIMARY)
-
-    st.divider()
-
-    # Phase table
-    st.markdown(f'<div class="section-header">Phase Summary (Live)</div>', unsafe_allow_html=True)
-    ph_tbl = pd.DataFrame([
-        {"Phase": f"Phase {i}", "Customers": ph_results[i]["customers"],
-         "Current ARR": f"${ph_results[i]['current_arr']:,.0f}",
-         "Max Uplift":  f"${ph_results[i]['max_uplift']:,.0f}",
-         "Scenario Uplift": f"${ph_results[i]['scenario_uplift']:,.0f}"}
-        for i in [1,2,3]
+    # Scenario table
+    st.markdown("")
+    section("Phase Scenario Detail")
+    ph_labels = {1: "Phase 1 — Score 1–2", 2: "Phase 2 — Score 3", 3: "Phase 3 — Score 4–5"}
+    sc_tbl = pd.DataFrame([
+        {
+            "Phase":          ph_labels[i],
+            "Customers":      ph_results[i]["customers"],
+            "Current ARR":    fmt_arr(ph_results[i]["current_arr"]),
+            "Potential ARR":  fmt_arr(ph_results[i]["potential_arr"]),
+            "Incremental ARR":fmt_arr(ph_results[i]["incremental_arr"]),
+            "Retention":      f"{ph_ret_map[i]*100:.0f}%",
+        }
+        for i in [1, 2, 3]
     ])
-    st.dataframe(ph_tbl, use_container_width=True, hide_index=True, height=142)
+    st.dataframe(sc_tbl, use_container_width=True, hide_index=True, height=142)
 
-    st.divider()
+    # Do Nothing vs Pricing Program summary
+    st.markdown("")
+    col_l, col_r = st.columns(2)
+    with col_l:
+        st.markdown(f"""
+        <div class="kpi-card red">
+          <div class="kpi-label">Do Nothing Scenario</div>
+          <div class="kpi-value" style='color:{RED}'>{fmt_arr(baseline_arr)}</div>
+          <div class="kpi-sub">ARR stays flat. Pricing gaps compound over time.</div>
+        </div>""", unsafe_allow_html=True)
+    with col_r:
+        st.markdown(f"""
+        <div class="kpi-card green">
+          <div class="kpi-label">Pricing Program Scenario</div>
+          <div class="kpi-value" style='color:{GREEN}'>{fmt_arr(projected)}</div>
+          <div class="kpi-sub">+{fmt_arr(total_incr)} incremental ARR ({pct_uplift:.1f}% uplift).</div>
+        </div>""", unsafe_allow_html=True)
 
-    # ARR trajectory line chart
-    st.markdown(f'<div class="section-header">ARR Trajectory (Months 0 → 12)</div>', unsafe_allow_html=True)
-    months = [0, 3, 6, 12]
+    download_btn(sc_tbl, "⬇ Download Scenario Summary", "scenario_summary.csv")
 
-    # Baseline: flat
-    baseline_line = [baseline_arr] * 4
 
-    # Scenario: accumulate phase impacts at M3, M6, M12
-    def scenario_line(rets):
-        arr0 = baseline_arr
-        # M3: phase 1 impact
-        ph1 = phase_scenario(1, rets[1])
-        arr3 = arr0 + ph1["scenario_uplift"]
-        ph2 = phase_scenario(2, rets[2])
-        arr6 = arr3 + ph2["scenario_uplift"]
-        ph3 = phase_scenario(3, rets[3])
-        arr12= arr6 + ph3["scenario_uplift"]
-        return [arr0, arr3, arr6, arr12]
-
-    scen_line  = scenario_line(ph_ret)
-    down_ret   = {i: max(0.0, ph_ret[i] - 0.05) for i in [1,2,3]}
-    down_line  = scenario_line(down_ret)
-
-    fig_arr = go.Figure()
-    fig_arr.add_scatter(x=months, y=baseline_line, name="Baseline",
-                        line=dict(color=GRAY, dash="dash"), mode="lines+markers")
-    fig_arr.add_scatter(x=months, y=scen_line, name="Scenario",
-                        line=dict(color=PRIMARY, width=3), mode="lines+markers")
-    fig_arr.add_scatter(x=months, y=down_line, name="Downside (-5pp)",
-                        line=dict(color=YELLOW, dash="dot"), mode="lines+markers")
-    fig_arr.update_layout(
-        height=350, margin=dict(t=20,b=20,l=20,r=20),
-        xaxis=dict(title="Month", tickvals=[0,3,6,12]),
-        yaxis=dict(title="Annual ARR ($)", tickformat="$,.0f"),
-        legend=dict(orientation="h", y=1.08),
-        plot_bgcolor=BG, paper_bgcolor="white",
-    )
-    st.plotly_chart(fig_arr, use_container_width=True)
-
-    st.divider()
-
-    # Cost of inaction
-    st.markdown(f'<div class="section-header">Cost of Inaction</div>', unsafe_allow_html=True)
-    # Rate erosion = discount gap from list for Expired M2M customers
-    m2m_custs     = cust[cust["contract_status"] == "Expired M2M"]
-    rate_erosion  = (m2m_custs["list_annual_arr"] - m2m_custs["annual_arr"]).clip(lower=0).sum()
-    floor_gap_tot = cust["floor_gap_annual"].sum()
-    inaction_total= rate_erosion + floor_gap_tot
-
-    c1, c2, c3 = st.columns(3)
-    with c1: metric_card("Rate Erosion (M2M Gap)", f"${rate_erosion:,.0f}",
-                         "Annual discount gap for Expired M2M customers", color=YELLOW)
-    with c2: metric_card("Below-Floor Gap", f"${floor_gap_tot:,.0f}",
-                         "Annual shortfall from below-floor pricing", color=RED)
-    with c3: metric_card("Total Cost of Inaction", f"${inaction_total:,.0f}",
-                         "Rate erosion + floor gap", color=RED)
-
-    st.markdown(f"""
-    <div style='background:{BG};border-radius:10px;padding:16px 20px;margin-top:12px;'>
-      <b>Act vs Don't Act:</b>&nbsp;&nbsp;
-      <span style='color:{GREEN}'>▲ Scenario Uplift: ${max(0,incremental):,.0f}</span>
-      &nbsp;|&nbsp;
-      <span style='color:{RED}'>▼ Cost of Inaction: ${inaction_total:,.0f}</span>
-      &nbsp;|&nbsp;
-      <b>Gap: ${max(0,incremental)+inaction_total:,.0f}</b>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.divider()
-    rev_export = pd.DataFrame([
-        {"Metric":"Baseline ARR","Value":f"${baseline_arr:,.0f}"},
-        {"Metric":"Projected ARR","Value":f"${projected_arr:,.0f}"},
-        {"Metric":"Incremental ARR","Value":f"${incremental:,.0f}"},
-        {"Metric":"% Uplift","Value":f"{pct_uplift:.1f}%"},
-        {"Metric":"Rate Erosion","Value":f"${rate_erosion:,.0f}"},
-        {"Metric":"Floor Gap","Value":f"${floor_gap_tot:,.0f}"},
-        {"Metric":"Total Cost of Inaction","Value":f"${inaction_total:,.0f}"},
-    ])
-    download_btn(rev_export, "Download Revenue Impact Summary", "revenue_impact.csv")
+# ═══════════════════════════════════════════════════════════════════════════════
+# ROUTING
+# ═══════════════════════════════════════════════════════════════════════════════
+if page == "Executive Summary":
+    page_executive_summary()
+elif page == "Pricing Opportunity":
+    page_pricing_opportunity()
+elif page == "Risk & Readiness":
+    page_risk_readiness()
+elif page == "Action Center":
+    page_action_center()
