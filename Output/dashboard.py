@@ -40,9 +40,7 @@ def get_path(filename):
 
 
 def get_enriched_path():
-    p1 = os.path.join(os.path.dirname(__file__), "..", "..", "03_Final_Report", "customers_enriched.csv")
-    p2 = os.path.join(os.path.dirname(__file__), "..", "Input", "customers_enriched.csv")
-    return p1 if os.path.exists(p1) else p2
+    return get_path("customers_enriched.csv")
 
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
@@ -105,71 +103,79 @@ AX_FONT  = dict(size=13)
 
 # ── Data Loading ──────────────────────────────────────────────────────────────
 @st.cache_data
-def build_customer_df():
-    df = pd.read_csv(get_enriched_path())
-
-    df["end_date"]          = pd.to_datetime(df["end_date"],          errors="coerce")
-    df["last_billing_date"] = pd.to_datetime(df["last_billing_date"], errors="coerce")
-
-    df["has_sf"]  = (
+def build_line_df():
+    """Active subscription lines from the verified 388-customer dataset."""
+    df = pd.read_csv(get_path("stripeXsfdc.csv"))
+    df["unit_price"]        = df["unit_amount"] / 100
+    df.loc[df["billing_interval"] == "year", "unit_price"] /= 12
+    df["last_billing_date"] = pd.to_datetime(df["last_billing_date"])
+    df["days_since"]        = (REF_DATE - df["last_billing_date"]).dt.days
+    df["is_active"]         = (
+        ((df["billing_interval"] == "month") & (df["days_since"] <= 60)) |
+        ((df["billing_interval"] == "year")  & (df["days_since"] <= 400))
+    )
+    df["list_price"]        = df["price_nickname"].map(LIST_PRICES)
+    df["floor_price"]       = df["price_nickname"].map(FLOOR_PRICES)
+    df["floor_gap_monthly"] = (df["floor_price"] - df["unit_price"]).clip(lower=0) * df["quantity"]
+    df["end_date"]          = pd.to_datetime(df["end_date"], errors="coerce")
+    df["has_sf"]            = (
         df["metadata_salesforce_id"].notna() &
         (df["metadata_salesforce_id"].astype(str).str.strip() != "")
     )
-    df["has_csm"] = (
-        df["csm_name__c"].notna() &
-        (df["csm_name__c"].astype(str).str.strip() != "")
+    df["has_contract"]      = (
+        df["contract_id"].notna() &
+        (df["contract_id"].astype(str).str.strip() != "")
     )
+    return df
 
-    for col in [
-        "hiring_quantity", "hr_quantity", "payroll_quantity",
-        "hiring_ppu_monthly", "hr_ppu_monthly", "payroll_ppu_monthly",
-        "total_arr", "below_floor_annual_gap", "weighted_pct_of_list", "tenure_days",
-    ]:
-        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-    df["churn_risk_score"] = pd.to_numeric(df["churn_risk_score"], errors="coerce")
+@st.cache_data
+def build_customer_df():
+    """388 customers from stripeXsfdc.csv + verified churn_risk_score from enriched CSV."""
+    line_df = build_line_df()
+    active  = line_df[line_df["is_active"]].copy()
 
-    df["list_annual_arr"]  = (
-        df["hiring_quantity"]  * LIST_PRICES["Hiring"] +
-        df["hr_quantity"]      * LIST_PRICES["HR"] +
-        df["payroll_quantity"] * LIST_PRICES["Payroll"]
-    ) * 12
-    df["floor_annual_arr"] = (
-        df["hiring_quantity"]  * FLOOR_PRICES["Hiring"] +
-        df["hr_quantity"]      * FLOOR_PRICES["HR"] +
-        df["payroll_quantity"] * FLOOR_PRICES["Payroll"]
-    ) * 12
-    df["annual_arr"]       = df["total_arr"]
-    df["floor_gap_annual"] = df["below_floor_annual_gap"]
-    df["pct_of_list"]      = df["weighted_pct_of_list"]
-    df["tenure_years"]     = df["tenure_days"] / 365.25
+    def agg(g):
+        mr   = (g["unit_price"] * g["quantity"]).sum()
+        lr   = (g["list_price"] * g["quantity"]).sum()
+        fg   = g["floor_gap_monthly"].sum() * 12
+        far  = (g["floor_price"] * g["quantity"]).sum() * 12
+        pct  = mr / lr if lr > 0 else 0
+        inc  = max(0, (1 / pct - 1) * 100) if pct > 0 else 999
+        has_sf       = g["has_sf"].any()
+        has_contract = g["has_contract"].any()
+        end_date     = g["end_date"].max()
+        created      = pd.to_datetime(g["created"].min())
+        tenure_years = (REF_DATE - created).days / 365.25
+        csm_s  = g["csm_name__c"].dropna(); csm_s = csm_s[csm_s.str.strip() != ""]
+        has_csm = len(csm_s) > 0
+        if has_contract and pd.notna(end_date) and end_date > REF_DATE:
+            status = "Locked"
+        elif has_contract and pd.notna(end_date) and end_date <= REF_DATE:
+            status = "Expired M2M"
+        elif not has_sf:
+            status = "No SF Link"
+        else:
+            status = "No Contract"
+        return pd.Series({
+            "annual_arr":       mr * 12,
+            "list_annual_arr":  lr * 12,
+            "floor_annual_arr": far,
+            "floor_gap_annual": fg,
+            "pct_of_list":      pct,
+            "increase_pct":     inc,
+            "contract_status":  status,
+            "end_date":         end_date,
+            "tenure_years":     tenure_years,
+            "has_csm":          has_csm,
+            "has_sf":           has_sf,
+        })
 
-    # Visual contract status: split "No Contract" into "No SF Link" where has_sf=False
-    def display_status(row):
-        if row["contract_status"] == "No Contract" and not row["has_sf"]:
-            return "No SF Link"
-        return row["contract_status"]
-    df["display_contract_status"] = df.apply(display_status, axis=1)
+    cust = active.groupby("stripe_customer_id", group_keys=False).apply(agg).reset_index()
 
-    def renewal_bucket(row):
-        if row["contract_status"] != "Locked" or pd.isna(row["end_date"]):
-            return None
-        m = (row["end_date"] - REF_DATE).days / 30.44
-        return ("0-3 Months" if m <= 3 else "3-6 Months" if m <= 6
-                else "6-12 Months" if m <= 12 else "12+ Months")
-    df["renewal_bucket"] = df.apply(renewal_bucket, axis=1)
-
-    def phase_fn(row):
-        st_ = row["contract_status"]
-        bkt = row["renewal_bucket"]
-        if st_ == "Locked":
-            return 1 if bkt in ("0-3 Months", "3-6 Months") else np.nan
-        if st_ == "Expired M2M":
-            return 2
-        if st_ == "No Contract":
-            return 3
-        return np.nan
-    df["phase"] = df.apply(phase_fn, axis=1)
+    cust["segment"] = cust["pct_of_list"].apply(
+        lambda p: "A" if p >= 1.0 else ("B" if p >= 0.9 else ("C" if p >= 0.75 else "D"))
+    )
 
     def target_fn(row):
         s = row["segment"]
@@ -177,69 +183,117 @@ def build_customer_df():
         if s == "B": return row["list_annual_arr"]
         if s == "C": return row["list_annual_arr"] * 0.9
         return row["floor_annual_arr"]
-    df["target_annual_arr"] = df.apply(target_fn, axis=1)
-    df["max_uplift"]        = (df["target_annual_arr"] - df["annual_arr"]).clip(lower=0)
+    cust["target_annual_arr"] = cust.apply(target_fn, axis=1)
+    cust["max_uplift"]        = (cust["target_annual_arr"] - cust["annual_arr"]).clip(lower=0)
 
-    return df
+    def renewal_bucket(row):
+        if row["contract_status"] != "Locked" or pd.isna(row["end_date"]): return None
+        m = (row["end_date"] - REF_DATE).days / 30.44
+        return ("0-3 Months" if m <= 3 else "3-6 Months" if m <= 6
+                else "6-12 Months" if m <= 12 else "12+ Months")
+    cust["renewal_bucket"] = cust.apply(renewal_bucket, axis=1)
+
+    def phase_fn(row):
+        st_ = row["contract_status"]
+        bkt = row["renewal_bucket"]
+        if st_ == "Locked":
+            return 1 if bkt in ("0-3 Months", "3-6 Months") else np.nan
+        if st_ == "Expired M2M":   return 2
+        if st_ in ("No Contract", "No SF Link"): return 3
+        return np.nan
+    cust["phase"] = cust.apply(phase_fn, axis=1)
+
+    # display_contract_status: same as contract_status (No SF Link already distinct)
+    cust["display_contract_status"] = cust["contract_status"]
+
+    # Merge verified churn_risk_score from enriched CSV (left join — covers 383 of 388)
+    enc = pd.read_csv(get_enriched_path())[["stripe_customer_id", "churn_risk_score"]]
+    enc["churn_risk_score"] = pd.to_numeric(enc["churn_risk_score"], errors="coerce")
+    cust = cust.merge(enc, on="stripe_customer_id", how="left")
+
+    # Fallback formula for the 5 customers absent from enriched CSV
+    def churn_risk_fallback(row):
+        if pd.notna(row["churn_risk_score"]): return row["churn_risk_score"]
+        if row["contract_status"] == "Locked": return np.nan
+        p, inc, yrs, st_ = (row["pct_of_list"], row["increase_pct"],
+                             row["tenure_years"], row["contract_status"])
+        dd = 1 if p >= 1.0 else (2 if p >= 0.9 else (3 if p >= 0.75 else (4 if p >= 0.6 else 5)))
+        cp = 3 if st_ == "Expired M2M" else 5
+        t  = 1 if yrs >= 4 else (2 if yrs >= 3 else (3 if yrs >= 2 else (4 if yrs >= 1 else 5)))
+        im = 1 if inc <= 0 else (2 if inc <= 9 else (3 if inc <= 29 else (4 if inc <= 40 else 5)))
+        return int(np.clip(round(0.30*dd + 0.30*cp + 0.20*t + 0.20*im), 1, 5))
+    cust["churn_risk_score"] = cust.apply(churn_risk_fallback, axis=1)
+
+    return cust
 
 
 @st.cache_data
 def build_accounts_df():
-    cust = build_customer_df()
-    eligible = cust[
-        (cust["contract_status"] != "Locked") &
-        (cust["segment"].isin(["B", "C", "D"]))
-    ].copy()
+    """Per-product repricing rows built from stripeXsfdc.csv active lines."""
+    line_df = build_line_df()
+    active  = line_df[line_df["is_active"]].copy()
+    cust    = build_customer_df()
 
-    prod_map = {
-        "Hiring":  ("hiring_ppu_monthly",  "hiring_quantity"),
-        "HR":      ("hr_ppu_monthly",      "hr_quantity"),
-        "Payroll": ("payroll_ppu_monthly", "payroll_quantity"),
-    }
+    eligible_ids = set(cust[
+        (~cust["contract_status"].isin(["Locked"])) &
+        (cust["segment"].isin(["B", "C", "D"]))
+    ]["stripe_customer_id"])
+
+    active_elig = active[active["stripe_customer_id"].isin(eligible_ids)].copy()
+
+    def prod_agg(g):
+        qty = g["quantity"].sum()
+        ppu = (g["unit_price"] * g["quantity"]).sum() / qty if qty > 0 else 0
+        return pd.Series({"unit_price": ppu, "quantity": qty})
+
+    prod_df = (
+        active_elig
+        .groupby(["stripe_customer_id", "price_nickname"], group_keys=False)
+        .apply(prod_agg)
+        .reset_index()
+    )
+
+    cust_slim = cust[["stripe_customer_id", "segment", "phase",
+                       "churn_risk_score", "has_csm"]].copy()
+    prod_df = prod_df.merge(cust_slim, on="stripe_customer_id", how="left")
+
     rows = []
-    for _, r in eligible.iterrows():
+    for _, r in prod_df.iterrows():
+        prod = r["price_nickname"]
+        if prod not in LIST_PRICES: continue
         seg = r["segment"]
-        for prod, (ppu_col, qty_col) in prod_map.items():
-            ppu = float(r[ppu_col])
-            qty = float(r[qty_col])
-            if qty <= 0 or ppu <= 0:
-                continue
-            if seg == "B":
-                target = LIST_PRICES[prod]
-            elif seg == "C":
-                target = LIST_PRICES[prod] * 0.9
-            else:
-                target = FLOOR_PRICES[prod]
-            inc = max(0.0, target - ppu)
-            if inc <= 0:
-                continue
-            rows.append({
-                "Customer ID":     r["stripe_customer_id"],
-                "Segment":         seg,
-                "Product":         prod,
-                "Current Price":   ppu,
-                "Target Price":    target,
-                "Increase ($)":    inc,
-                "Increase (%)":    inc / ppu * 100,
-                "Current ARR":     ppu * qty * 12,
-                "Incremental ARR": inc * qty * 12,
-                "Phase":           int(r["phase"]) if pd.notna(r["phase"]) else None,
-                "Churn Risk":      int(r["churn_risk_score"]) if pd.notna(r["churn_risk_score"]) else None,
-                "CSM Assigned":    "Yes" if r["has_csm"] else "No",
-            })
+        ppu = float(r["unit_price"])
+        qty = float(r["quantity"])
+        if seg == "B": target = LIST_PRICES[prod]
+        elif seg == "C": target = LIST_PRICES[prod] * 0.9
+        else:            target = FLOOR_PRICES[prod]
+        inc = max(0.0, target - ppu)
+        if inc <= 0: continue
+        rows.append({
+            "Customer ID":     r["stripe_customer_id"],
+            "Segment":         seg,
+            "Product":         prod,
+            "Current Price":   ppu,
+            "Target Price":    target,
+            "Increase ($)":    inc,
+            "Increase (%)":    inc / ppu * 100 if ppu > 0 else 0,
+            "Current ARR":     ppu * qty * 12,
+            "Incremental ARR": inc * qty * 12,
+            "Phase":           int(r["phase"]) if pd.notna(r["phase"]) else None,
+            "Churn Risk":      int(r["churn_risk_score"]) if pd.notna(r["churn_risk_score"]) else None,
+            "CSM Assigned":    "Yes" if r["has_csm"] else "No",
+        })
     return pd.DataFrame(rows)
 
 
 @st.cache_data
 def get_product_medians():
-    df = pd.read_csv(get_enriched_path())
-    for col in ["hiring_ppu_monthly", "hr_ppu_monthly", "payroll_ppu_monthly",
-                "hiring_quantity", "hr_quantity", "payroll_quantity"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+    """Median unit prices per product from active stripeXsfdc.csv lines."""
+    line_df = build_line_df()
+    active  = line_df[line_df["is_active"]]
     return {
-        "Hiring":  df[df["hiring_quantity"]  > 0]["hiring_ppu_monthly"].median(),
-        "HR":      df[df["hr_quantity"]       > 0]["hr_ppu_monthly"].median(),
-        "Payroll": df[df["payroll_quantity"]  > 0]["payroll_ppu_monthly"].median(),
+        prod: active[active["price_nickname"] == prod]["unit_price"].median()
+        for prod in ["Hiring", "HR", "Payroll"]
     }
 
 
@@ -305,6 +359,7 @@ traj = {
 }
 
 _min_vs_inaction = min(sc_data[s]["vs_inaction"] for s in sc_data)
+_n_hr_all        = int((cust_all["churn_risk_score"] >= 4).sum())
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -537,7 +592,7 @@ with tab2:
             st.plotly_chart(fig_cs, use_container_width=True)
 
     with col_r:
-        sec("HALF THE ELIGIBLE BASE IS MEDIUM RISK — BUT 89 ACCOUNTS NEED A HUMAN CONVERSATION BEFORE ANY NOTICE GOES OUT")
+        sec(f"HALF THE ELIGIBLE BASE IS MEDIUM RISK — BUT {_n_hr_all} ACCOUNTS NEED A HUMAN CONVERSATION BEFORE ANY NOTICE GOES OUT")
         risk_df = cust_f[cust_f["churn_risk_score"].notna()]
         if len(risk_df) == 0:
             st.info("No risk data for selected segments.")
