@@ -359,7 +359,7 @@ traj = {
 }
 
 _min_vs_inaction = min(sc_data[s]["vs_inaction"] for s in sc_data)
-_n_hr_all        = int((cust_all["churn_risk_score"] >= 4).sum())
+_n_hr_all        = int(cust_all[(cust_all["contract_status"] != "Locked") & (cust_all["churn_risk_score"] >= 4)].shape[0])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -593,7 +593,7 @@ with tab2:
 
     with col_r:
         sec(f"HALF THE ELIGIBLE BASE IS MEDIUM RISK — BUT {_n_hr_all} ACCOUNTS NEED A HUMAN CONVERSATION BEFORE ANY NOTICE GOES OUT")
-        risk_df = cust_f[cust_f["churn_risk_score"].notna()]
+        risk_df = cust_f[(cust_f["contract_status"] != "Locked") & cust_f["churn_risk_score"].notna()]
         if len(risk_df) == 0:
             st.info("No risk data for selected segments.")
         else:
@@ -625,9 +625,10 @@ with tab2:
             )
             st.plotly_chart(fig_risk, use_container_width=True)
 
-    _hr_n      = int(cust_f[cust_f["churn_risk_score"] >= 4].shape[0])
-    _hr_no_csm = int(cust_f[(cust_f["churn_risk_score"] >= 4) & (~cust_f["has_csm"])].shape[0])
-    _hr_no_sf  = int(cust_f[(cust_f["churn_risk_score"] >= 4) & (~cust_f["has_sf"])].shape[0])
+    _nl_f      = cust_f[cust_f["contract_status"] != "Locked"]
+    _hr_n      = int((_nl_f["churn_risk_score"] >= 4).sum())
+    _hr_no_csm = int(_nl_f[(_nl_f["churn_risk_score"] >= 4) & (~_nl_f["has_csm"])].shape[0])
+    _hr_no_sf  = int(_nl_f[(_nl_f["churn_risk_score"] >= 4) & (~_nl_f["has_sf"])].shape[0])
     if _hr_n > 0:
         st.markdown(f"""
         <div class="gate">
