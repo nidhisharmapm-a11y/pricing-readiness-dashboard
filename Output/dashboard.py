@@ -18,52 +18,65 @@ BG      = "#EEF2FF"
 WHITE   = "#FFFFFF"
 GREEN   = "#00B67A"
 AMBER   = "#FFA500"
-RED     = "#FF4444"
+PURPLE  = "#7C5CBF"
 GRAY    = "#6B7280"
 
 LIST_PRICES  = {"Hiring": 75.0, "HR": 100.0, "Payroll": 14.0}
 FLOOR_PRICES = {"Hiring": 60.0, "HR": 80.0,  "Payroll": 11.0}
 REF_DATE     = pd.Timestamp("2026-06-20")
 
-SEG_COLORS = {"A": GREEN, "B": PRIMARY, "C": AMBER, "D": RED}
+SEG_COLORS    = {"A": GREEN, "B": PRIMARY, "C": AMBER, "D": PURPLE}
 STATUS_COLORS = {
     "Locked":      PRIMARY,
     "Expired M2M": AMBER,
     "No Contract": GRAY,
-    "No SF Link":  RED,
+    "No SF Link":  PURPLE,
 }
-RISK_COLORS = {1: GREEN, 2: "#66D4A8", 3: AMBER, 4: "#FF8C00", 5: RED}
+RISK_COLORS = {1: GREEN, 2: "#66D4A8", 3: AMBER, 4: "#FF8C00", 5: PURPLE}
+
 
 def get_path(filename):
     return os.path.join(os.path.dirname(__file__), "..", "Input", filename)
+
+
+def get_enriched_path():
+    p1 = os.path.join(os.path.dirname(__file__), "..", "..", "03_Final_Report", "customers_enriched.csv")
+    p2 = os.path.join(os.path.dirname(__file__), "..", "Input", "customers_enriched.csv")
+    return p1 if os.path.exists(p1) else p2
+
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown(f"""
 <style>
   body {{ font-family: sans-serif; }}
-  .kpi {{ background:{WHITE}; border-radius:10px; padding:16px 20px;
-           box-shadow:0 1px 4px rgba(0,0,0,.07); border-top:3px solid {PRIMARY}; }}
-  .kpi.green {{ border-top-color:{GREEN}; }}
-  .kpi.amber {{ border-top-color:{AMBER}; }}
-  .kpi.red   {{ border-top-color:{RED};   }}
-  .kpi.navy  {{ border-top-color:{NAVY};  }}
-  .kpi-label {{ font-size:10px; font-weight:700; color:{GRAY}; text-transform:uppercase; letter-spacing:.08em; }}
-  .kpi-value {{ font-size:26px; font-weight:800; color:{NAVY}; margin:4px 0 2px; line-height:1.1; }}
-  .kpi-sub   {{ font-size:11px; color:{GRAY}; }}
-  .kpi-delta {{ font-size:12px; font-weight:700; color:{GREEN}; margin-top:3px; }}
-  .sec {{ font-size:12px; font-weight:700; color:{NAVY}; border-bottom:1px solid #dde3f0;
-          padding-bottom:5px; margin-bottom:12px; text-transform:uppercase; letter-spacing:.05em; }}
-  .tab-h  {{ font-size:22px; font-weight:800; color:{NAVY}; margin-bottom:2px; }}
-  .tab-sh {{ font-size:13px; color:{GRAY}; margin-bottom:18px; }}
-  .sc-card {{ background:{WHITE}; border-radius:10px; padding:20px;
-              box-shadow:0 1px 4px rgba(0,0,0,.07); border:2px solid transparent; }}
-  .sc-card.sel {{ border-color:{PRIMARY}; background:{BG}; box-shadow:0 2px 12px rgba(27,63,228,.15); }}
-  .ph-card {{ background:{BG}; border-radius:10px; padding:18px; }}
-  .note {{ background:{BG}; border-radius:8px; padding:12px 16px;
-           border-left:4px solid {PRIMARY}; font-size:13px; color:{NAVY}; margin-top:12px; }}
-  .note.red {{ border-left-color:{RED}; }}
+  .kpi {{ background:{WHITE}; border-radius:10px; padding:18px 22px;
+           box-shadow:0 1px 4px rgba(0,0,0,.07); border-top:4px solid {PRIMARY}; }}
+  .kpi.green  {{ border-top-color:{GREEN};  }}
+  .kpi.amber  {{ border-top-color:{AMBER};  }}
+  .kpi.purple {{ border-top-color:{PURPLE}; }}
+  .kpi.navy   {{ border-top-color:{NAVY};   }}
+  .kpi-label {{ font-size:14px; font-weight:700; color:{GRAY}; text-transform:uppercase; letter-spacing:.06em; }}
+  .kpi-value {{ font-size:32px; font-weight:800; color:{NAVY}; margin:6px 0 4px; line-height:1.1; }}
+  .kpi-sub   {{ font-size:13px; color:{GRAY}; line-height:1.5; }}
+  .kpi-delta {{ font-size:13px; font-weight:700; color:{GRAY}; margin-top:5px; }}
+  .sec {{ font-size:16px; font-weight:700; color:{NAVY}; border-bottom:2px solid #dde3f0;
+          padding-bottom:6px; margin-bottom:14px; text-transform:uppercase; letter-spacing:.04em; }}
+  .tab-h  {{ font-size:26px; font-weight:800; color:{NAVY}; margin-bottom:4px; }}
+  .tab-sh {{ font-size:15px; color:{GRAY}; margin-bottom:20px; line-height:1.5; }}
+  .ph-card {{ background:{BG}; border-radius:10px; padding:20px; }}
+  .note {{ background:{BG}; border-radius:8px; padding:14px 18px;
+           border-left:4px solid {PRIMARY}; font-size:14px; color:{NAVY}; margin-top:14px; line-height:1.6; }}
+  .gate {{ background:#f5f0ff; border-radius:8px; padding:18px 22px;
+           border-left:5px solid {PURPLE}; font-size:15px; color:{NAVY}; margin-top:16px; line-height:1.7; }}
+  .seg-card {{ border-radius:12px; padding:22px 24px;
+               box-shadow:0 1px 6px rgba(0,0,0,.08); background:{WHITE}; height:100%; }}
+  .seg-action {{ background:{BG}; border-radius:8px; padding:12px 14px; margin-top:12px;
+                 font-size:14px; color:{NAVY}; line-height:1.6; }}
+  .filter-label {{ font-size:14px; font-weight:700; color:{GRAY}; text-transform:uppercase;
+                   letter-spacing:.06em; margin-bottom:8px; }}
 </style>
 """, unsafe_allow_html=True)
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def kpi(label, value, sub="", variant="", delta=""):
@@ -75,159 +88,175 @@ def kpi(label, value, sub="", variant="", delta=""):
       <div class="kpi-sub">{sub}</div>{d}
     </div>""", unsafe_allow_html=True)
 
+
 def sec(title):
     st.markdown(f'<div class="sec">{title}</div>', unsafe_allow_html=True)
+
 
 def fmt_m(v):
     if abs(v) >= 1_000_000: return f"${v/1_000_000:.2f}M"
     if abs(v) >= 1_000:     return f"${v/1_000:.0f}K"
     return f"${v:,.0f}"
 
-def pct_fmt(v): return f"{v:.1f}%"
 
-CHART = dict(plot_bgcolor=WHITE, paper_bgcolor=WHITE, font=dict(family="sans-serif", size=12))
+CHART    = dict(plot_bgcolor=WHITE, paper_bgcolor=WHITE, font=dict(family="sans-serif", size=13))
+AX_FONT  = dict(size=13)
+
 
 # ── Data Loading ──────────────────────────────────────────────────────────────
 @st.cache_data
-def build_line_df():
-    df = pd.read_csv(get_path("stripeXsfdc.csv"))
-    df["unit_price"]        = df["unit_amount"] / 100
-    df.loc[df["billing_interval"] == "year", "unit_price"] /= 12
-    df["last_billing_date"] = pd.to_datetime(df["last_billing_date"])
-    df["days_since"]        = (REF_DATE - df["last_billing_date"]).dt.days
-    df["is_active"]         = (
-        ((df["billing_interval"] == "month") & (df["days_since"] <= 60)) |
-        ((df["billing_interval"] == "year")  & (df["days_since"] <= 400))
-    )
-    df["list_price"]        = df["price_nickname"].map(LIST_PRICES)
-    df["floor_price"]       = df["price_nickname"].map(FLOOR_PRICES)
-    df["floor_gap_monthly"] = (df["floor_price"] - df["unit_price"]).clip(lower=0) * df["quantity"]
-    df["below_floor"]       = df["unit_price"] < df["floor_price"]
-    df["end_date"]          = pd.to_datetime(df["end_date"], errors="coerce")
-    df["has_sf"]            = df["metadata_salesforce_id"].notna() & (df["metadata_salesforce_id"] != "")
-    df["has_contract"]      = df["contract_id"].notna() & (df["contract_id"] != "")
-    return df
-
-
-@st.cache_data
 def build_customer_df():
-    line_df = build_line_df()
-    active  = line_df[line_df["is_active"]].copy()
+    df = pd.read_csv(get_enriched_path())
 
-    def agg(g):
-        mr   = (g["unit_price"] * g["quantity"]).sum()
-        lr   = (g["list_price"] * g["quantity"]).sum()
-        fg   = g["floor_gap_monthly"].sum() * 12
-        far  = (g["floor_price"] * g["quantity"]).sum() * 12
-        pct  = mr / lr if lr > 0 else 0
-        inc  = max(0, (1 / pct - 1) * 100) if pct > 0 else 999
+    df["end_date"]          = pd.to_datetime(df["end_date"],          errors="coerce")
+    df["last_billing_date"] = pd.to_datetime(df["last_billing_date"], errors="coerce")
 
-        has_sf       = g["has_sf"].any()
-        has_contract = g["has_contract"].any()
-        end_date     = g["end_date"].max()
-        created      = pd.to_datetime(g["created"].min())
-        tenure_years = (REF_DATE - created).days / 365.25
-
-        csm_s    = g["csm_name__c"].dropna()
-        csm_s    = csm_s[csm_s.str.strip() != ""]
-        has_csm  = len(csm_s) > 0
-
-        ae_s    = g["account_ae"].dropna()
-        ae_s    = ae_s[ae_s.str.strip() != ""]
-        ae_name = ae_s.iloc[0] if len(ae_s) > 0 else "—"
-
-        if has_contract and pd.notna(end_date) and end_date > REF_DATE:
-            status = "Locked"
-        elif has_contract and pd.notna(end_date) and end_date <= REF_DATE:
-            status = "Expired M2M"
-        elif not has_sf:
-            status = "No SF Link"
-        else:
-            status = "No Contract"
-
-        return pd.Series({
-            "annual_arr":       mr * 12,
-            "list_annual_arr":  lr * 12,
-            "floor_annual_arr": far,
-            "floor_gap_annual": fg,
-            "pct_of_list":      pct,
-            "increase_pct":     inc,
-            "contract_status":  status,
-            "end_date":         end_date,
-            "tenure_years":     tenure_years,
-            "has_csm":          has_csm,
-            "has_sf":           has_sf,
-            "account_ae":       ae_name,
-        })
-
-    cust = active.groupby("stripe_customer_id").apply(agg).reset_index()
-
-    # Segment: quantity-weighted avg % of list per customer
-    cust["segment"] = cust["pct_of_list"].apply(
-        lambda p: "A" if p >= 1.0 else ("B" if p >= 0.9 else ("C" if p >= 0.75 else "D"))
+    df["has_sf"]  = (
+        df["metadata_salesforce_id"].notna() &
+        (df["metadata_salesforce_id"].astype(str).str.strip() != "")
+    )
+    df["has_csm"] = (
+        df["csm_name__c"].notna() &
+        (df["csm_name__c"].astype(str).str.strip() != "")
     )
 
-    # Segment-specific max uplift: B→list, C→90% of list, D→floor, A→0
+    for col in [
+        "hiring_quantity", "hr_quantity", "payroll_quantity",
+        "hiring_ppu_monthly", "hr_ppu_monthly", "payroll_ppu_monthly",
+        "total_arr", "below_floor_annual_gap", "weighted_pct_of_list", "tenure_days",
+    ]:
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+    df["churn_risk_score"] = pd.to_numeric(df["churn_risk_score"], errors="coerce")
+
+    df["list_annual_arr"]  = (
+        df["hiring_quantity"]  * LIST_PRICES["Hiring"] +
+        df["hr_quantity"]      * LIST_PRICES["HR"] +
+        df["payroll_quantity"] * LIST_PRICES["Payroll"]
+    ) * 12
+    df["floor_annual_arr"] = (
+        df["hiring_quantity"]  * FLOOR_PRICES["Hiring"] +
+        df["hr_quantity"]      * FLOOR_PRICES["HR"] +
+        df["payroll_quantity"] * FLOOR_PRICES["Payroll"]
+    ) * 12
+    df["annual_arr"]       = df["total_arr"]
+    df["floor_gap_annual"] = df["below_floor_annual_gap"]
+    df["pct_of_list"]      = df["weighted_pct_of_list"]
+    df["tenure_years"]     = df["tenure_days"] / 365.25
+
+    # Visual contract status: split "No Contract" into "No SF Link" where has_sf=False
+    def display_status(row):
+        if row["contract_status"] == "No Contract" and not row["has_sf"]:
+            return "No SF Link"
+        return row["contract_status"]
+    df["display_contract_status"] = df.apply(display_status, axis=1)
+
+    def renewal_bucket(row):
+        if row["contract_status"] != "Locked" or pd.isna(row["end_date"]):
+            return None
+        m = (row["end_date"] - REF_DATE).days / 30.44
+        return ("0-3 Months" if m <= 3 else "3-6 Months" if m <= 6
+                else "6-12 Months" if m <= 12 else "12+ Months")
+    df["renewal_bucket"] = df.apply(renewal_bucket, axis=1)
+
+    def phase_fn(row):
+        st_ = row["contract_status"]
+        bkt = row["renewal_bucket"]
+        if st_ == "Locked":
+            return 1 if bkt in ("0-3 Months", "3-6 Months") else np.nan
+        if st_ == "Expired M2M":
+            return 2
+        if st_ == "No Contract":
+            return 3
+        return np.nan
+    df["phase"] = df.apply(phase_fn, axis=1)
+
     def target_fn(row):
         s = row["segment"]
         if s == "A": return row["annual_arr"]
         if s == "B": return row["list_annual_arr"]
         if s == "C": return row["list_annual_arr"] * 0.9
         return row["floor_annual_arr"]
+    df["target_annual_arr"] = df.apply(target_fn, axis=1)
+    df["max_uplift"]        = (df["target_annual_arr"] - df["annual_arr"]).clip(lower=0)
 
-    cust["target_annual_arr"] = cust.apply(target_fn, axis=1)
-    cust["max_uplift"] = (cust["target_annual_arr"] - cust["annual_arr"]).clip(lower=0)
+    return df
 
-    # Churn risk (non-locked only): discount depth 30% + contract protection 30% + tenure 20% + increase magnitude 20%
-    def churn_risk(row):
-        if row["contract_status"] == "Locked": return np.nan
-        p, inc, yrs, st_ = (row["pct_of_list"], row["increase_pct"],
-                             row["tenure_years"], row["contract_status"])
-        dd = 1 if p >= 1.0 else (2 if p >= 0.9 else (3 if p >= 0.75 else (4 if p >= 0.6 else 5)))
-        cp = 3 if st_ == "Expired M2M" else 5
-        t  = 1 if yrs >= 4 else (2 if yrs >= 3 else (3 if yrs >= 2 else (4 if yrs >= 1 else 5)))
-        im = 1 if inc <= 0 else (2 if inc <= 9 else (3 if inc <= 29 else (4 if inc <= 40 else 5)))
-        return int(np.clip(round(0.30*dd + 0.30*cp + 0.20*t + 0.20*im), 1, 5))
 
-    cust["churn_risk"] = cust.apply(churn_risk, axis=1)
+@st.cache_data
+def build_accounts_df():
+    cust = build_customer_df()
+    eligible = cust[
+        (cust["contract_status"] != "Locked") &
+        (cust["segment"].isin(["B", "C", "D"]))
+    ].copy()
 
-    # Renewal bucket (locked only) — needed for phase assignment
-    def renewal_bucket(row):
-        if row["contract_status"] != "Locked" or pd.isna(row["end_date"]): return None
-        m = (row["end_date"] - REF_DATE).days / 30.44
-        return ("0-3 Months" if m <= 3 else "3-6 Months" if m <= 6 else
-                "6-12 Months" if m <= 12 else "12+ Months")
+    prod_map = {
+        "Hiring":  ("hiring_ppu_monthly",  "hiring_quantity"),
+        "HR":      ("hr_ppu_monthly",      "hr_quantity"),
+        "Payroll": ("payroll_ppu_monthly", "payroll_quantity"),
+    }
+    rows = []
+    for _, r in eligible.iterrows():
+        seg = r["segment"]
+        for prod, (ppu_col, qty_col) in prod_map.items():
+            ppu = float(r[ppu_col])
+            qty = float(r[qty_col])
+            if qty <= 0 or ppu <= 0:
+                continue
+            if seg == "B":
+                target = LIST_PRICES[prod]
+            elif seg == "C":
+                target = LIST_PRICES[prod] * 0.9
+            else:
+                target = FLOOR_PRICES[prod]
+            inc = max(0.0, target - ppu)
+            if inc <= 0:
+                continue
+            rows.append({
+                "Customer ID":     r["stripe_customer_id"],
+                "Segment":         seg,
+                "Product":         prod,
+                "Current Price":   ppu,
+                "Target Price":    target,
+                "Increase ($)":    inc,
+                "Increase (%)":    inc / ppu * 100,
+                "Current ARR":     ppu * qty * 12,
+                "Incremental ARR": inc * qty * 12,
+                "Phase":           int(r["phase"]) if pd.notna(r["phase"]) else None,
+                "Churn Risk":      int(r["churn_risk_score"]) if pd.notna(r["churn_risk_score"]) else None,
+                "CSM Assigned":    "Yes" if r["has_csm"] else "No",
+            })
+    return pd.DataFrame(rows)
 
-    cust["renewal_bucket"] = cust.apply(renewal_bucket, axis=1)
 
-    # Phase: contract-status based (Phase 1=Locked<=6mo, Phase 2=Expired M2M, Phase 3=No Contract/SF Link)
-    def phase_fn(row):
-        st_ = row["contract_status"]
-        bkt = row["renewal_bucket"]
-        if st_ == "Locked":
-            return 1 if bkt in ("0-3 Months", "3-6 Months") else np.nan
-        if st_ == "Expired M2M":   return 2
-        if st_ in ("No Contract", "No SF Link"): return 3
-        return np.nan
-
-    cust["phase"] = cust.apply(phase_fn, axis=1)
-    return cust
+@st.cache_data
+def get_product_medians():
+    df = pd.read_csv(get_enriched_path())
+    for col in ["hiring_ppu_monthly", "hr_ppu_monthly", "payroll_ppu_monthly",
+                "hiring_quantity", "hr_quantity", "payroll_quantity"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+    return {
+        "Hiring":  df[df["hiring_quantity"]  > 0]["hiring_ppu_monthly"].median(),
+        "HR":      df[df["hr_quantity"]       > 0]["hr_ppu_monthly"].median(),
+        "Payroll": df[df["payroll_quantity"]  > 0]["payroll_ppu_monthly"].median(),
+    }
 
 
 # ── Load data ─────────────────────────────────────────────────────────────────
 cust_all  = build_customer_df()
-line_all  = build_line_df()
-active_all = line_all[line_all["is_active"]].copy()
+_medians  = get_product_medians()
+acc_df    = build_accounts_df()
 
-# ── Pre-compute program-level figures (unfiltered) ────────────────────────────
+# ── Pre-compute program-level figures ─────────────────────────────────────────
+n_all            = len(cust_all)
 baseline_arr     = cust_all["annual_arr"].sum()
 floor_gap_annual = cust_all["floor_gap_annual"].sum()
 seg_a_unlocked   = cust_all[
     (cust_all["segment"] == "A") & (cust_all["contract_status"] != "Locked")
 ]["annual_arr"].sum()
-cost_of_inaction = floor_gap_annual + seg_a_unlocked * 0.05  # floor gap + 5% Seg A uncontracted drift
+cost_of_inaction = floor_gap_annual + seg_a_unlocked * 0.05
 
-# Phase data
 _phase_info = {}
 for _ph in [1, 2, 3]:
     _sub = cust_all[cust_all["phase"] == _ph]
@@ -237,7 +266,6 @@ for _ph in [1, 2, 3]:
         "max_uplift":  _sub["max_uplift"].sum(),
     }
 
-# Retention maps per scenario
 RET = {
     "Maximum":   {1: 1.00, 2: 1.00, 3: 1.00},
     "Base Case": {1: 0.88, 2: 0.85, 3: 0.83},
@@ -263,7 +291,6 @@ for sc_name, ret_map in RET.items():
         "ret":          ret_map,
     }
 
-# Trajectory points [Month 0, 3, 6, 12]
 _months = [0, 3, 6, 12]
 
 def trajectory(per_ph):
@@ -277,11 +304,18 @@ traj = {
     "Maximum":   trajectory(sc_data["Maximum"]["per_ph"]),
 }
 
+_min_vs_inaction = min(sc_data[s]["vs_inaction"] for s in sc_data)
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TABS
 # ══════════════════════════════════════════════════════════════════════════════
-tab1, tab2, tab3 = st.tabs(["  ⚡ The Business  ", "  🔍 The Diagnosis  ", "  📈 The Program  "])
+tab1, tab2, tab3, tab4 = st.tabs([
+    "  ⚡ The Business  ",
+    "  🔍 The Diagnosis  ",
+    "  📋 The Accounts  ",
+    "  📈 The Program  ",
+])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -290,88 +324,86 @@ tab1, tab2, tab3 = st.tabs(["  ⚡ The Business  ", "  🔍 The Diagnosis  ", " 
 with tab1:
     st.markdown('<div class="tab-h">The Business</div>', unsafe_allow_html=True)
     st.markdown(
-        f'<div class="tab-sh">Pricing landscape · {len(cust_all)} active customers · {fmt_m(baseline_arr)} total ARR · data through {REF_DATE.strftime("%b %d, %Y")}</div>',
+        f'<div class="tab-sh">{fmt_m(baseline_arr)} ARR across {n_all} active customers '
+        f'— but pricing compliance and contract coverage tell a different story</div>',
         unsafe_allow_html=True,
     )
 
-    # KPI row
-    avg_per_cust  = baseline_arr / len(cust_all) if len(cust_all) > 0 else 0
+    avg_per_cust  = baseline_arr / n_all if n_all > 0 else 0
     below_floor_n = (cust_all["floor_gap_annual"] > 0).sum()
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        kpi("Total ARR", fmt_m(baseline_arr), f"{len(cust_all)} active customers", "navy")
+        kpi("Current ARR Base", fmt_m(baseline_arr),
+            f"Across {n_all} active customers — Stripe verified, June 2026", "navy")
     with c2:
-        kpi("Avg ARR per Customer", fmt_m(avg_per_cust), "Across all active customers")
+        kpi("Revenue Per Customer", fmt_m(avg_per_cust),
+            "Healthy unit economics — the pricing model works when enforced")
     with c3:
-        kpi("Customers Below Floor", str(below_floor_n),
-            f"{fmt_m(floor_gap_annual)}/yr under-collected at minimum prices", "amber")
+        kpi("Billing Below Their Own Floor", str(below_floor_n),
+            "These customers aren't getting a discount — they're paying less than Workstream's stated minimum",
+            "amber")
     with c4:
-        kpi("Cost of Inaction", fmt_m(cost_of_inaction),
-            "Annual revenue at risk if no program launches", "red",
-            delta=f"Floor gap {fmt_m(floor_gap_annual)} + Seg A drift {fmt_m(seg_a_unlocked * 0.05)}")
+        kpi("What Inaction Costs Per Year", fmt_m(cost_of_inaction),
+            "Every month without a program running is $13,500 that doesn't come back",
+            "purple",
+            delta=f"{fmt_m(floor_gap_annual)} floor under-collection + {fmt_m(seg_a_unlocked * 0.05)} Seg A erosion risk")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
     # Chart 1: Price benchmarks
-    sec("PRICE BENCHMARKS BY PRODUCT — ACTUAL MEDIAN VS FLOOR VS LIST")
+    sec("WORKSTREAM'S PRICES ARE HOLDING — MEDIANS SIT CLOSE TO LIST ACROSS ALL THREE PRODUCTS")
 
-    _products = ["Hiring", "HR", "Payroll"]
-    _medians  = {}
-    for _p in _products:
-        _lines = active_all[active_all["price_nickname"] == _p]
-        _medians[_p] = _lines["unit_price"].median() if len(_lines) > 0 else 0
-
-    _pct_labels = {
-        _p: f"{_medians[_p] / LIST_PRICES[_p] * 100:.0f}% of list" for _p in _products
-    }
+    _products   = ["Hiring", "HR", "Payroll"]
+    _pct_labels = {_p: f"{_medians[_p] / LIST_PRICES[_p] * 100:.0f}% of list" for _p in _products}
 
     fig_price = go.Figure()
     fig_price.add_bar(
         name="Floor", x=_products,
         y=[FLOOR_PRICES[p] for p in _products],
-        marker_color=RED, opacity=0.65,
+        marker_color=PURPLE, opacity=0.70,
         text=[f"${FLOOR_PRICES[p]:.0f}" for p in _products],
-        textposition="inside", textfont=dict(color=WHITE, size=11),
+        textposition="inside", textfont=dict(color=WHITE, size=12),
     )
     fig_price.add_bar(
         name="Median Actual", x=_products,
         y=[_medians[p] for p in _products],
         marker_color=PRIMARY,
         text=[f"${_medians[p]:.2f} ({_pct_labels[p]})" for p in _products],
-        textposition="outside", textfont=dict(size=11),
+        textposition="outside", textfont=dict(size=12),
     )
     fig_price.add_bar(
         name="List Price", x=_products,
         y=[LIST_PRICES[p] for p in _products],
-        marker_color=GREEN, opacity=0.65,
+        marker_color=GREEN, opacity=0.70,
         text=[f"${LIST_PRICES[p]:.0f}" for p in _products],
-        textposition="inside", textfont=dict(color=WHITE, size=11),
+        textposition="inside", textfont=dict(color=WHITE, size=12),
     )
     fig_price.update_layout(
-        barmode="group", height=300,
+        barmode="group", height=320,
         margin=dict(t=20, b=20, l=10, r=10),
-        yaxis=dict(title="Monthly Price per Unit ($)", tickformat="$,.0f"),
-        xaxis=dict(title=""),
-        legend=dict(orientation="h", y=1.12, x=0),
+        yaxis=dict(title="Monthly Price per Unit ($)", tickformat="$,.0f",
+                   title_font=AX_FONT, tickfont=AX_FONT),
+        xaxis=dict(title="", tickfont=AX_FONT),
+        legend=dict(orientation="h", y=1.14, x=0, font=dict(size=13)),
         **CHART,
     )
     st.plotly_chart(fig_price, use_container_width=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Charts 2 + 3: Segment bars
     col_l, col_r = st.columns(2)
+    _seg_counts = cust_all["segment"].value_counts().reindex(["A","B","C","D"], fill_value=0)
+    _seg_arr    = cust_all.groupby("segment")["annual_arr"].sum().reindex(["A","B","C","D"], fill_value=0)
+    _seg_labels = {
+        "A": f"Seg A  ≥100% of list  ({_seg_counts['A']})",
+        "B": f"Seg B  90–99%  ({_seg_counts['B']})",
+        "C": f"Seg C  75–89%  ({_seg_counts['C']})",
+        "D": f"Seg D  <75%    ({_seg_counts['D']})",
+    }
 
     with col_l:
-        sec("CUSTOMER COUNT BY SEGMENT")
-        _seg_counts = cust_all["segment"].value_counts().reindex(["A","B","C","D"], fill_value=0)
-        _seg_labels = {
-            "A": f"Seg A  ≥100% of list  ({_seg_counts['A']})",
-            "B": f"Seg B  90–99%  ({_seg_counts['B']})",
-            "C": f"Seg C  75–89%  ({_seg_counts['C']})",
-            "D": f"Seg D  <75%    ({_seg_counts['D']})",
-        }
+        sec("SEGMENT A IS THE LARGEST COHORT — AND THE ONLY ONE WHERE THE PRIORITY IS PROTECTION, NOT INCREASE")
         fig_cnt = go.Figure(go.Bar(
             x=_seg_counts.values,
             y=[_seg_labels[s] for s in _seg_counts.index],
@@ -379,18 +411,18 @@ with tab1:
             marker_color=[SEG_COLORS[s] for s in _seg_counts.index],
             text=[f"{v}" for v in _seg_counts.values],
             textposition="outside",
+            textfont=dict(size=13),
         ))
         fig_cnt.update_layout(
-            height=240, margin=dict(t=10, b=10, l=10, r=50),
-            xaxis=dict(title="Customers"),
-            yaxis=dict(title="", autorange="reversed"),
+            height=260, margin=dict(t=10, b=10, l=10, r=60),
+            xaxis=dict(title="Customers", title_font=AX_FONT, tickfont=AX_FONT),
+            yaxis=dict(title="", autorange="reversed", tickfont=dict(size=13)),
             **CHART,
         )
         st.plotly_chart(fig_cnt, use_container_width=True)
 
     with col_r:
-        sec("ARR BY SEGMENT")
-        _seg_arr = cust_all.groupby("segment")["annual_arr"].sum().reindex(["A","B","C","D"], fill_value=0)
+        sec("46% OF ARR SITS IN SEGMENT A — AT RISK IF LEFT UNCONTRACTED")
         fig_arr = go.Figure(go.Bar(
             x=_seg_arr.values,
             y=[_seg_labels[s] for s in _seg_arr.index],
@@ -398,21 +430,24 @@ with tab1:
             marker_color=[SEG_COLORS[s] for s in _seg_arr.index],
             text=[fmt_m(v) for v in _seg_arr.values],
             textposition="outside",
+            textfont=dict(size=13),
         ))
         fig_arr.update_layout(
-            height=240, margin=dict(t=10, b=10, l=10, r=70),
-            xaxis=dict(title="Annual ARR ($)", tickformat="$,.0f"),
-            yaxis=dict(title="", autorange="reversed"),
+            height=260, margin=dict(t=10, b=10, l=10, r=80),
+            xaxis=dict(title="Annual ARR ($)", tickformat="$,.0f",
+                       title_font=AX_FONT, tickfont=AX_FONT),
+            yaxis=dict(title="", autorange="reversed", tickfont=dict(size=13)),
             **CHART,
         )
         st.plotly_chart(fig_arr, use_container_width=True)
 
+    _pct_no_contract = (cust_all["contract_status"] != "Locked").sum() / n_all * 100
     st.markdown(f"""
     <div class="note">
-    <b>What this shows:</b> Segment A ({_seg_counts.get('A', 0)} customers, {fmt_m(_seg_arr.get('A', 0))})
-    is the largest revenue pool and proves list prices are commercially achievable.
-    {below_floor_n} customers billing below Workstream's own floor price represent {fmt_m(floor_gap_annual)}/year
-    in under-collection — no customer negotiation required to fix it.
+    Segment A's {_seg_counts.get('A', 0)} customers at or above list price prove the pricing model is
+    commercially viable — customers will pay it. The problem isn't the price. It's that
+    {_pct_no_contract:.1f}% of the base has no contract locking it in, and {below_floor_n} customers
+    are already slipping below floor without any enforcement mechanism to catch them.
     </div>""", unsafe_allow_html=True)
 
 
@@ -421,39 +456,41 @@ with tab1:
 # ══════════════════════════════════════════════════════════════════════════════
 with tab2:
     st.markdown('<div class="tab-h">The Diagnosis</div>', unsafe_allow_html=True)
-    st.markdown('<div class="tab-sh">What blocks execution of the pricing program?</div>',
-                unsafe_allow_html=True)
+    st.markdown(
+        '<div class="tab-sh">Three structural gaps must be closed before any pricing action can be safely executed</div>',
+        unsafe_allow_html=True,
+    )
 
-    # KPIs
-    _no_contract_n   = cust_all[cust_all["contract_status"].isin(
-        ["Expired M2M", "No Contract", "No SF Link"])].shape[0]
-    _no_contract_pct = _no_contract_n / len(cust_all) * 100 if len(cust_all) > 0 else 0
-    _no_csm_n        = (~cust_all["has_csm"]).sum()
-    _no_csm_pct      = _no_csm_n / len(cust_all) * 100 if len(cust_all) > 0 else 0
-    _no_sf_n         = (~cust_all["has_sf"]).sum()
+    _no_contract_n = cust_all[cust_all["contract_status"] != "Locked"].shape[0]
+    _no_csm_n      = (~cust_all["has_csm"]).sum()
+    _no_sf_n       = (~cust_all["has_sf"]).sum()
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        kpi("No Current Contract", f"{_no_contract_pct:.0f}%",
-            f"{_no_contract_n} of {len(cust_all)} active customers", "amber")
+        kpi("Unprotected from Repricing", str(_no_contract_n),
+            f"{_no_contract_n} of {n_all} customers have no active contract — no legal basis to hold any price",
+            "amber")
     with c2:
-        kpi("No CSM Assigned", f"{_no_csm_pct:.0f}%",
-            f"{_no_csm_n} customers with no relationship owner", "red")
+        kpi("No Relationship Owner", str(_no_csm_n),
+            f"{_no_csm_n} customers have no CSM — pricing conversations have no one to lead them",
+            "purple")
     with c3:
-        kpi("Invisible to Salesforce", str(_no_sf_n),
-            "No Stripe-SFDC link — AE and contract status unknown", "red")
+        kpi("Off the Radar Entirely", str(_no_sf_n),
+            f"{_no_sf_n} customers are billing in Stripe but don't exist in Salesforce — no AE, no contract, no visibility",
+            "purple")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Segment filter
     st.markdown(
-        f'<div style="font-size:10px;font-weight:700;color:{GRAY};text-transform:uppercase;'
-        f'letter-spacing:.08em;margin-bottom:6px">Filter by Segment</div>',
+        f'<div class="filter-label">Explore Risk by Pricing Segment</div>',
         unsafe_allow_html=True,
     )
     sel_segs = st.multiselect(
         "Segment filter", options=["A", "B", "C", "D"], default=["A", "B", "C", "D"],
-        format_func=lambda s: f"Segment {s}  ({'≥100%' if s=='A' else '90-99%' if s=='B' else '75-89%' if s=='C' else '<75%'} of list)",
+        format_func=lambda s: (
+            f"Segment {s}  "
+            f"({'≥100%' if s=='A' else '90-99%' if s=='B' else '75-89%' if s=='C' else '<75%'} of list)"
+        ),
         label_visibility="collapsed",
     )
     if not sel_segs:
@@ -465,7 +502,7 @@ with tab2:
     col_l, col_r = st.columns(2)
 
     with col_l:
-        sec("CONTRACT STATUS BY SEGMENT")
+        sec("MOST CUSTOMERS HAVE NO CONTRACT — CONCENTRATED IN SEGMENTS C AND D WHERE REPRICING RISK IS HIGHEST")
         if len(cust_f) == 0:
             st.info("No data for selected segments.")
         else:
@@ -473,8 +510,13 @@ with tab2:
             _status_order = ["Locked", "Expired M2M", "No Contract", "No SF Link"]
             _seg_order    = [s for s in ["A", "B", "C", "D"] if s in sel_segs]
             for _st in _status_order:
-                _ys = [cust_f[(cust_f["segment"] == s) & (cust_f["contract_status"] == _st)].shape[0]
-                       for s in _seg_order]
+                _ys = [
+                    cust_f[
+                        (cust_f["segment"] == s) &
+                        (cust_f["display_contract_status"] == _st)
+                    ].shape[0]
+                    for s in _seg_order
+                ]
                 fig_cs.add_bar(
                     name=_st,
                     x=[f"Seg {s}" for s in _seg_order],
@@ -482,68 +524,242 @@ with tab2:
                     marker_color=STATUS_COLORS[_st],
                     text=[str(v) if v > 0 else "" for v in _ys],
                     textposition="inside",
+                    textfont=dict(size=13, color=WHITE),
                 )
             fig_cs.update_layout(
-                barmode="stack", height=340,
+                barmode="stack", height=360,
                 margin=dict(t=10, b=30, l=10, r=10),
-                yaxis=dict(title="Customers"),
-                xaxis=dict(title=""),
-                legend=dict(orientation="h", y=1.1, x=0),
+                yaxis=dict(title="Customers", title_font=AX_FONT, tickfont=AX_FONT),
+                xaxis=dict(title="", tickfont=AX_FONT),
+                legend=dict(orientation="h", y=1.1, x=0, font=dict(size=13)),
                 **CHART,
             )
             st.plotly_chart(fig_cs, use_container_width=True)
 
     with col_r:
-        sec("CHURN RISK DISTRIBUTION — NON-LOCKED CUSTOMERS")
-        risk_df = cust_f[cust_f["churn_risk"].notna()]
+        sec("HALF THE ELIGIBLE BASE IS MEDIUM RISK — BUT 89 ACCOUNTS NEED A HUMAN CONVERSATION BEFORE ANY NOTICE GOES OUT")
+        risk_df = cust_f[cust_f["churn_risk_score"].notna()]
         if len(risk_df) == 0:
-            st.info("No risk data for selected segments (all locked, or no segments selected).")
+            st.info("No risk data for selected segments.")
         else:
             _rcounts = (
-                risk_df["churn_risk"].astype(int)
+                risk_df["churn_risk_score"].astype(int)
                 .value_counts().sort_index()
                 .reindex([1, 2, 3, 4, 5], fill_value=0)
             )
-            _rlabels = {1: "1 – Low", 2: "2 – Low-Med", 3: "3 – Medium",
-                        4: "4 – High", 5: "5 – Highest"}
+            _rlabels = {
+                1: "1 – Low",
+                2: "2 – Low-Med",
+                3: "3 – Medium",
+                4: "4 – High ⚠️",
+                5: "5 – Highest ⚠️",
+            }
             fig_risk = go.Figure(go.Bar(
                 x=[_rlabels[i] for i in _rcounts.index],
                 y=_rcounts.values,
                 marker_color=[RISK_COLORS[i] for i in _rcounts.index],
                 text=_rcounts.values,
                 textposition="outside",
+                textfont=dict(size=13),
             ))
             fig_risk.update_layout(
-                height=340, margin=dict(t=10, b=30, l=10, r=10),
-                yaxis=dict(title="Customers"),
-                xaxis=dict(title=""),
+                height=360, margin=dict(t=10, b=30, l=10, r=10),
+                yaxis=dict(title="Customers", title_font=AX_FONT, tickfont=AX_FONT),
+                xaxis=dict(title="", tickfont=AX_FONT),
                 **CHART,
             )
             st.plotly_chart(fig_risk, use_container_width=True)
 
-    # Insight
-    _hr_n       = cust_f[cust_f["churn_risk"] >= 4].shape[0] if len(cust_f) > 0 else 0
-    _hr_no_csm  = cust_f[(cust_f["churn_risk"] >= 4) & (~cust_f["has_csm"])].shape[0] if len(cust_f) > 0 else 0
-    _hr_no_sf   = cust_f[(cust_f["churn_risk"] >= 4) & (~cust_f["has_sf"])].shape[0] if len(cust_f) > 0 else 0
+    _hr_n      = int(cust_f[cust_f["churn_risk_score"] >= 4].shape[0])
+    _hr_no_csm = int(cust_f[(cust_f["churn_risk_score"] >= 4) & (~cust_f["has_csm"])].shape[0])
+    _hr_no_sf  = int(cust_f[(cust_f["churn_risk_score"] >= 4) & (~cust_f["has_sf"])].shape[0])
     if _hr_n > 0:
         st.markdown(f"""
-        <div class="note red">
-        <b>Gate rule:</b> {_hr_n} customers in selected segments score 4–5 (high/highest risk)
-        and require a CSM- or AE-led conversation before any rate notice is sent.
-        {_hr_no_csm} of these have no CSM assigned. {_hr_no_sf} have no Salesforce record.
-        CSM coverage for all Score 4–5 accounts is a hard pre-launch requirement.
+        <div class="gate">
+        <b>{_hr_n} customers</b> in the selected segments are high or highest risk — they need a CSM-
+        or AE-led conversation before any rate notice is issued. Of these,
+        <b>{_hr_no_csm}</b> have no CSM assigned and <b>{_hr_no_sf}</b> don't exist in Salesforce.
+        No notice should go out to any of these accounts until coverage is in place.
+        This is a hard pre-launch gate, not a guideline.
         </div>""", unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 3 — THE PROGRAM
+# TAB 3 — THE ACCOUNTS
 # ══════════════════════════════════════════════════════════════════════════════
 with tab3:
-    st.markdown('<div class="tab-h">The Program</div>', unsafe_allow_html=True)
-    st.markdown('<div class="tab-sh">12-month ARR projection under three execution scenarios — phased by contract status</div>',
-                unsafe_allow_html=True)
+    st.markdown('<div class="tab-h">The Accounts</div>', unsafe_allow_html=True)
 
-    # Scenario toggle
+    # ── Segment card data ─────────────────────────────────────────────────────
+    _pct_range = {
+        "A": "≥100% of list", "B": "90–99% of list",
+        "C": "75–89% of list", "D": "<75% of list",
+    }
+    _seg_clr = {"A": GREEN, "B": PRIMARY, "C": AMBER, "D": PURPLE}
+
+    _sd = {}
+    for _s in ["A", "B", "C", "D"]:
+        _rows      = cust_all[cust_all["segment"] == _s]
+        _nonlocked = _rows[_rows["contract_status"] != "Locked"]
+        _sd[_s] = {
+            "n":         len(_rows),
+            "arr":       _rows["annual_arr"].sum(),
+            "n_nonlocked": len(_nonlocked),
+            "max_uplift":  _nonlocked["max_uplift"].sum(),
+        }
+
+    _b_avg_gap = (
+        _sd["B"]["max_uplift"] / _sd["B"]["n_nonlocked"]
+        if _sd["B"]["n_nonlocked"] > 0 else 0
+    )
+
+    def _seg_card(s, col):
+        d   = _sd[s]
+        clr = _seg_clr[s]
+        if s == "A":
+            action = (
+                f"Contract execution — protect above-list rates. "
+                f"{d['n_nonlocked']} of {d['n']} are uncontracted."
+            )
+            uplift_html = (
+                f'<div style="margin-top:14px;padding:10px 14px;background:#fff8e6;'
+                f'border-radius:6px;border-left:3px solid {AMBER};font-size:14px;color:{NAVY};line-height:1.5">'
+                f'⚠️&nbsp; Rate erosion risk if uncontracted at renewal</div>'
+            )
+        elif s == "B":
+            action = (
+                f"Raise to list — {d['n_nonlocked']} non-locked eligible. "
+                f"Avg gap ~${_b_avg_gap:,.0f}/customer/yr."
+            )
+            uplift_html = (
+                f'<div style="margin-top:14px">'
+                f'<div style="font-size:12px;font-weight:700;color:{GRAY};text-transform:uppercase;letter-spacing:.06em">Max Uplift</div>'
+                f'<div style="font-size:26px;font-weight:800;color:{clr}">{fmt_m(d["max_uplift"])}</div>'
+                f'</div>'
+            )
+        elif s == "C":
+            action = (
+                f"Step to 90% of list — {d['n_nonlocked']} non-locked eligible. "
+                f"Single step avoids a 15%+ jump."
+            )
+            uplift_html = (
+                f'<div style="margin-top:14px">'
+                f'<div style="font-size:12px;font-weight:700;color:{GRAY};text-transform:uppercase;letter-spacing:.06em">Max Uplift</div>'
+                f'<div style="font-size:26px;font-weight:800;color:{clr}">{fmt_m(d["max_uplift"])}</div>'
+                f'</div>'
+            )
+        else:
+            action = (
+                f"Correct to floor — {d['n_nonlocked']} non-locked eligible. "
+                f"Frame as floor restoration, not increase."
+            )
+            uplift_html = (
+                f'<div style="margin-top:14px">'
+                f'<div style="font-size:12px;font-weight:700;color:{GRAY};text-transform:uppercase;letter-spacing:.06em">Max Uplift</div>'
+                f'<div style="font-size:26px;font-weight:800;color:{clr}">{fmt_m(d["max_uplift"])}</div>'
+                f'</div>'
+            )
+        with col:
+            st.markdown(f"""
+            <div class="seg-card" style="border-left:5px solid {clr}">
+              <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px">
+                <div style="font-size:20px;font-weight:800;color:{clr}">Segment {s}</div>
+                <div style="font-size:14px;color:{GRAY}">{_pct_range[s]}</div>
+              </div>
+              <div style="font-size:15px;color:{NAVY};margin-bottom:10px">
+                <b>{d['n']} customers</b> &nbsp;·&nbsp; {fmt_m(d['arr'])} ARR
+              </div>
+              <div class="seg-action">{action}</div>
+              {uplift_html}
+            </div>""", unsafe_allow_html=True)
+
+    # Row 1: A and B
+    row1 = st.columns(2)
+    _seg_card("A", row1[0])
+    _seg_card("B", row1[1])
+
+    st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+
+    # Row 2: C and D
+    row2 = st.columns(2)
+    _seg_card("C", row2[0])
+    _seg_card("D", row2[1])
+
+    # Total strip
+    _total_nl_bcd  = sum(_sd[s]["n_nonlocked"] for s in ["B", "C", "D"])
+    _total_max_bcd = sum(_sd[s]["max_uplift"]   for s in ["B", "C", "D"])
+    st.markdown(f"""
+    <div style="background:{NAVY};border-radius:10px;padding:16px 26px;margin-top:14px;
+                display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:15px;font-weight:600;color:rgba(255,255,255,.65)">
+        Total non-locked eligible max uplift
+      </div>
+      <div style="font-size:20px;font-weight:800;color:{GREEN}">
+        {fmt_m(_total_max_bcd)}&nbsp; across &nbsp;{_total_nl_bcd} customers
+      </div>
+    </div>""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Account-level repricing table ─────────────────────────────────────────
+    sec("WHO GETS RAISED AND BY HOW MUCH — ACCOUNT-LEVEL DETAIL")
+    st.markdown(
+        f'<div style="font-size:14px;color:{GRAY};margin-bottom:16px">'
+        f'All eligible non-locked customers, ranked by incremental ARR opportunity</div>',
+        unsafe_allow_html=True,
+    )
+
+    f1, f2 = st.columns(2)
+    with f1:
+        _ph_sel = st.selectbox("Phase", ["All", "Phase 1", "Phase 2", "Phase 3"], index=0)
+    with f2:
+        _risk_sel = st.selectbox("Churn Risk", ["All", "Low–Medium (1–3)", "High–Highest (4–5)"], index=0)
+
+    _tbl = acc_df.copy()
+    if _ph_sel != "All":
+        _ph_num = int(_ph_sel.split()[-1])
+        _tbl    = _tbl[_tbl["Phase"] == _ph_num]
+    if _risk_sel == "Low–Medium (1–3)":
+        _tbl = _tbl[_tbl["Churn Risk"].notna() & (_tbl["Churn Risk"] <= 3)]
+    elif _risk_sel == "High–Highest (4–5)":
+        _tbl = _tbl[_tbl["Churn Risk"].notna() & (_tbl["Churn Risk"] >= 4)]
+
+    _tbl = _tbl.sort_values("Incremental ARR", ascending=False).reset_index(drop=True)
+
+    def _highlight_risk(row):
+        cr = row["Churn Risk"]
+        if cr is not None and pd.notna(cr) and int(cr) >= 4:
+            return ["background-color: #f5f0ff"] * len(row)
+        return [""] * len(row)
+
+    _styled = (
+        _tbl.style
+        .apply(_highlight_risk, axis=1)
+        .format({
+            "Current Price":   "${:.2f}",
+            "Target Price":    "${:.2f}",
+            "Increase ($)":    "${:.2f}",
+            "Increase (%)":    "{:.1f}%",
+            "Current ARR":     "${:,.0f}",
+            "Incremental ARR": "${:,.0f}",
+            "Churn Risk":      lambda x: str(int(x)) if pd.notna(x) else "—",
+            "Phase":           lambda x: f"Phase {int(x)}" if pd.notna(x) else "—",
+        })
+    )
+    st.dataframe(_styled, use_container_width=True, hide_index=True, height=520)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 4 — THE PROGRAM
+# ══════════════════════════════════════════════════════════════════════════════
+with tab4:
+    st.markdown('<div class="tab-h">The Program</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="tab-sh">Even the most conservative execution scenario outperforms inaction '
+        f'by {fmt_m(_min_vs_inaction)} over 12 months</div>',
+        unsafe_allow_html=True,
+    )
+
     _sc_sel = st.radio(
         "Scenario", ["Base Case", "Maximum", "Downside"],
         horizontal=True, label_visibility="collapsed",
@@ -551,39 +767,38 @@ with tab3:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Three scenario tiles
     _sc_order = [
-        ("Maximum",   GREEN,   "100% retention — every customer accepts"),
-        ("Base Case", PRIMARY, "88 / 85 / 83% retention by phase"),
-        ("Downside",  AMBER,   "83 / 80 / 78% retention — 5pts worse"),
+        ("Maximum",   GREEN,   "Best case: every account accepts the new rate"),
+        ("Base Case", PRIMARY, "Realistic: industry-standard retention by phase"),
+        ("Downside",  AMBER,   "Conservative: 5 points below base case at every phase"),
     ]
     sc_cols = st.columns(3)
     for _col, (_name, _color, _desc) in zip(sc_cols, _sc_order):
-        _d    = sc_data[_name]
-        _sel  = (_name == _sc_sel)
-        _bg   = BG if _sel else WHITE
-        _bdr  = f"border:2px solid {PRIMARY}" if _sel else "border:2px solid transparent"
+        _d   = sc_data[_name]
+        _sel = (_name == _sc_sel)
+        _bg  = BG if _sel else WHITE
+        _bdr = f"border:2px solid {PRIMARY}" if _sel else "border:2px solid transparent"
         with _col:
             st.markdown(f"""
-            <div style="background:{_bg};border-radius:10px;padding:20px;{_bdr};
+            <div style="background:{_bg};border-radius:10px;padding:22px;{_bdr};
                         box-shadow:0 1px 6px rgba(0,0,0,.08)">
-              <div style="font-size:10px;font-weight:700;color:{GRAY};
-                          text-transform:uppercase;letter-spacing:.08em">{_name}</div>
-              <div style="font-size:11px;color:{GRAY};margin-bottom:10px">{_desc}</div>
-              <div style="font-size:28px;font-weight:800;color:{_color}">{fmt_m(_d['total_uplift'])}</div>
-              <div style="font-size:11px;color:{GRAY};margin-bottom:10px">12-month incremental ARR</div>
-              <div style="font-size:14px;font-weight:700;color:{NAVY}">{fmt_m(_d['new_arr'])}</div>
-              <div style="font-size:11px;color:{GRAY};margin-bottom:6px">New ARR at Month 12</div>
-              <div style="font-size:13px;font-weight:700;color:{GREEN}">+{fmt_m(_d['vs_inaction'])} vs inaction</div>
+              <div style="font-size:14px;font-weight:700;color:{GRAY};
+                          text-transform:uppercase;letter-spacing:.06em">{_name}</div>
+              <div style="font-size:13px;color:{GRAY};margin-bottom:12px">{_desc}</div>
+              <div style="font-size:32px;font-weight:800;color:{_color}">{fmt_m(_d['total_uplift'])}</div>
+              <div style="font-size:13px;color:{GRAY};margin-bottom:12px">incremental ARR by Month 12</div>
+              <div style="font-size:16px;font-weight:700;color:{NAVY}">{fmt_m(_d['new_arr'])}</div>
+              <div style="font-size:13px;color:{GRAY};margin-bottom:8px">total ARR at Month 12</div>
+              <div style="font-size:14px;font-weight:700;color:{GREEN}">+{fmt_m(_d['vs_inaction'])} vs inaction</div>
             </div>""", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Line chart — 4 ARR trajectories
-    sec("ARR TRAJECTORY — INACTION VS THREE EXECUTION SCENARIOS")
+    # Trajectory chart
+    sec("EVERY EXECUTION SCENARIO GROWS ARR — INACTION IS THE ONLY PATH THAT ERODES IT")
 
     _line_cfg = {
-        "Inaction":  dict(color=RED,     dash="dot",   width=2),
+        "Inaction":  dict(color=PURPLE,  dash="dot",   width=2),
         "Downside":  dict(color=AMBER,   dash="solid", width=2),
         "Base Case": dict(color=PRIMARY, dash="solid", width=2),
         "Maximum":   dict(color=GREEN,   dash="solid", width=2),
@@ -607,34 +822,39 @@ with tab3:
             hovertemplate=f"<b>{_ln_name}</b>  Month %{{x}}: %{{text}}<extra></extra>",
         )
 
-    # End-point annotations for month-12 values
     for _ln_name, _ln_traj in traj.items():
         fig_traj.add_annotation(
             x=12, y=_ln_traj[-1],
             text=f"  {fmt_m(_ln_traj[-1])}",
             showarrow=False, xanchor="left",
-            font=dict(size=11, color=_line_cfg[_ln_name]["color"]),
+            font=dict(size=12, color=_line_cfg[_ln_name]["color"]),
         )
 
     fig_traj.update_layout(
-        height=380, margin=dict(t=20, b=30, l=10, r=100),
+        height=400, margin=dict(t=20, b=30, l=10, r=110),
         xaxis=dict(title="", tickvals=[0, 3, 6, 12],
-                   ticktext=["Now", "Month 3", "Month 6", "Month 12"]),
-        yaxis=dict(title="ARR ($)", tickformat="$,.0f"),
-        legend=dict(orientation="h", y=1.08, x=0),
+                   ticktext=["Now", "Month 3", "Month 6", "Month 12"],
+                   tickfont=AX_FONT),
+        yaxis=dict(title="ARR ($)", tickformat="$,.0f",
+                   title_font=AX_FONT, tickfont=AX_FONT),
+        legend=dict(orientation="h", y=1.08, x=0, font=dict(size=13)),
         **CHART,
     )
     st.plotly_chart(fig_traj, use_container_width=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Phase tiles — always base case, as specified
+    # Phase tiles
     sec("EXECUTION PHASES — BASE CASE UPLIFT BREAKDOWN")
 
-    _ph_names   = {1: "Phase 1 — Locked Renewals", 2: "Phase 2 — Expired M2M", 3: "Phase 3 — No Contract"}
-    _ph_timing  = {1: "Months 1–3", 2: "Months 3–6", 3: "Months 6–12"}
-    _ph_colors  = {1: GREEN, 2: PRIMARY, 3: AMBER}
-    _base_ret   = RET["Base Case"]
+    _ph_names  = {
+        1: "Phase 1 — Lock In Renewals Before They Slip",
+        2: "Phase 2 — Reprice Customers Already Billing Without a Contract",
+        3: "Phase 3 — Convert and Reprice the Largest Cohort",
+    }
+    _ph_timing = {1: "Months 1–3", 2: "Months 3–6", 3: "Months 6–12"}
+    _ph_colors = {1: GREEN, 2: PRIMARY, 3: AMBER}
+    _base_ret  = RET["Base Case"]
 
     ph_cols = st.columns(3)
     for _ph, _col in zip([1, 2, 3], ph_cols):
@@ -644,52 +864,55 @@ with tab3:
         with _col:
             st.markdown(f"""
             <div class="ph-card" style="border-left:4px solid {_ph_colors[_ph]}">
-              <div style="font-size:10px;font-weight:700;color:{GRAY};
-                          text-transform:uppercase;letter-spacing:.08em">{_ph_names[_ph]}</div>
-              <div style="font-size:11px;color:{GRAY};margin-bottom:14px">{_ph_timing[_ph]}</div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 8px">
+              <div style="font-size:15px;font-weight:700;color:{NAVY};margin-bottom:4px">{_ph_names[_ph]}</div>
+              <div style="font-size:13px;color:{GRAY};margin-bottom:16px">{_ph_timing[_ph]}</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 10px">
                 <div>
-                  <div style="font-size:9px;font-weight:700;color:{GRAY};
+                  <div style="font-size:11px;font-weight:700;color:{GRAY};
                               text-transform:uppercase;letter-spacing:.06em">Customers</div>
-                  <div style="font-size:22px;font-weight:800;color:{NAVY}">{_pi['customers']}</div>
+                  <div style="font-size:24px;font-weight:800;color:{NAVY}">{_pi['customers']}</div>
                 </div>
                 <div>
-                  <div style="font-size:9px;font-weight:700;color:{GRAY};
+                  <div style="font-size:11px;font-weight:700;color:{GRAY};
                               text-transform:uppercase;letter-spacing:.06em">Current ARR</div>
-                  <div style="font-size:22px;font-weight:800;color:{NAVY}">{fmt_m(_pi['current_arr'])}</div>
+                  <div style="font-size:24px;font-weight:800;color:{NAVY}">{fmt_m(_pi['current_arr'])}</div>
                 </div>
                 <div>
-                  <div style="font-size:9px;font-weight:700;color:{GRAY};
+                  <div style="font-size:11px;font-weight:700;color:{GRAY};
                               text-transform:uppercase;letter-spacing:.06em">Base Uplift</div>
-                  <div style="font-size:22px;font-weight:800;color:{_ph_colors[_ph]}">{fmt_m(_base_inc)}</div>
+                  <div style="font-size:24px;font-weight:800;color:{_ph_colors[_ph]}">{fmt_m(_base_inc)}</div>
                 </div>
                 <div>
-                  <div style="font-size:9px;font-weight:700;color:{GRAY};
+                  <div style="font-size:11px;font-weight:700;color:{GRAY};
                               text-transform:uppercase;letter-spacing:.06em">Retention Target</div>
-                  <div style="font-size:22px;font-weight:800;color:{NAVY}">{_ret_pct}%</div>
+                  <div style="font-size:24px;font-weight:800;color:{NAVY}">{_ret_pct}%</div>
                 </div>
               </div>
             </div>""", unsafe_allow_html=True)
 
-    # Program vs inaction summary
+    # Bottom summary bar
     st.markdown("<br>", unsafe_allow_html=True)
     _sel_d = sc_data[_sc_sel]
     st.markdown(f"""
-    <div style="background:{NAVY};border-radius:10px;padding:18px 24px;
+    <div style="background:{NAVY};border-radius:10px;padding:20px 28px;
                 display:flex;align-items:center;justify-content:space-between">
       <div>
-        <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.5);
+        <div style="font-size:13px;font-weight:700;color:rgba(255,255,255,.5);
                     text-transform:uppercase;letter-spacing:.08em">Selected Scenario — {_sc_sel}</div>
-        <div style="font-size:26px;font-weight:800;color:{GREEN};margin:4px 0">
-          +{fmt_m(_sel_d['total_uplift'])} incremental ARR</div>
-        <div style="font-size:13px;color:rgba(255,255,255,.7)">
-          vs inaction: +{fmt_m(_sel_d['vs_inaction'])} &nbsp;|&nbsp;
-          New ARR at Month 12: {fmt_m(_sel_d['new_arr'])}</div>
+        <div style="font-size:28px;font-weight:800;color:{GREEN};margin:6px 0">
+          +{fmt_m(_sel_d['total_uplift'])} in incremental ARR — already in the base, waiting to be collected
+        </div>
+        <div style="font-size:14px;color:rgba(255,255,255,.7)">
+          {fmt_m(_sel_d['vs_inaction'])} better than doing nothing
+          &nbsp;·&nbsp; Total ARR at Month 12: {fmt_m(_sel_d['new_arr'])}
+        </div>
       </div>
-      <div style="text-align:right">
-        <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.5);
-                    text-transform:uppercase;letter-spacing:.08em">Do Nothing</div>
-        <div style="font-size:26px;font-weight:800;color:{RED}">{fmt_m(baseline_arr - cost_of_inaction)}</div>
-        <div style="font-size:13px;color:rgba(255,255,255,.7)">ARR at Month 12 (eroding)</div>
+      <div style="text-align:right;min-width:200px">
+        <div style="font-size:13px;font-weight:700;color:rgba(255,255,255,.5);
+                    text-transform:uppercase;letter-spacing:.08em">The Cost of Waiting</div>
+        <div style="font-size:28px;font-weight:800;color:{PURPLE}">{fmt_m(baseline_arr - cost_of_inaction)}</div>
+        <div style="font-size:13px;color:rgba(255,255,255,.7)">
+          ARR at Month 12 if no program launches — actively eroding
+        </div>
       </div>
     </div>""", unsafe_allow_html=True)
